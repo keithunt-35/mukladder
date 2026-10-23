@@ -485,6 +485,8 @@ class ChallengesScreen extends ConsumerWidget {
         ).future,
       );
       ref.invalidate(resultsProvider);
+      ref.invalidate(challengesProvider);
+      ref.invalidate(rankingProvider);
       if (context.mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Result ${status.name}.')));

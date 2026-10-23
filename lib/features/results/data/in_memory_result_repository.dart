@@ -76,6 +76,12 @@ class InMemoryResultRepository implements ResultRepository {
 
     final updatedResult = result.transitionTo(status);
     _results[index] = updatedResult;
+    if (status == ResultStatus.confirmed) {
+      await challengeRepository.completeChallenge(
+        challengeId: result.challengeId,
+        actorId: actorId,
+      );
+    }
     return updatedResult;
   }
 

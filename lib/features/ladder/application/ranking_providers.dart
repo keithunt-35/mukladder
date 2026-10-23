@@ -1,16 +1,25 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../challenges/application/challenge_providers.dart';
 import '../../players/domain/player.dart';
+import '../../results/application/result_providers.dart';
 import '../data/in_memory_ranking_repository.dart';
 import '../data/ranking_repository.dart';
+import '../domain/provisional_ranking_calculator.dart';
 import '../domain/ranking_entry.dart';
 
 final rankingRepositoryProvider = Provider<RankingRepository>((ref) {
   return InMemoryRankingRepository(entries: demoRankingEntries);
 });
 
-final rankingProvider = FutureProvider<List<RankingEntry>>((ref) {
-  return ref.watch(rankingRepositoryProvider).getRanking();
+final rankingProvider = FutureProvider<List<RankingEntry>>((ref) async {
+  final challenges = await ref.watch(challengesProvider.future);
+  final results = await ref.watch(resultsProvider.future);
+  return const ProvisionalRankingCalculator().calculate(
+    entries: demoRankingEntries,
+    challenges: challenges,
+    results: results,
+  );
 });
 
 // The email provides positions but not per-player activity timestamps. The

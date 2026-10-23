@@ -24,6 +24,8 @@ October for stabilization and demonstration preparation where possible.
 - **Acceptance:** Confirming the seeded demo result changes the displayed
   ranking, and refreshing or repeating the action does not apply it twice.
 - **Dependencies:** Task 1.
+- **Status:** Implemented by deriving the ladder from confirmed in-memory
+  results and invalidating the ranking provider after result transitions.
 
 ## 3. Finalize the data model
 
@@ -32,6 +34,14 @@ October for stabilization and demonstration preparation where possible.
   boundaries are approved and documented.
 - **Dependencies:** Tasks 1–2.
 - **Blocked:** Yes, if the official rules or stakeholder decisions are missing.
+
+## Phase 4 — Challenges and results — completed
+
+- **Completed:** Normal challenge creation, challenge responses, result
+  submission, confirmation/dispute, challenge completion after confirmation,
+  and provisional ranking refresh.
+- **Deferred:** Official rule enforcement, Firebase persistence, audit-event
+  storage and administrative review workflows.
 
 ## 4. Configure Firebase and implement authentication
 

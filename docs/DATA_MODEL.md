@@ -13,6 +13,8 @@ Firebase implementation.
   It rejects invalid state transitions.
 - `MatchResult`: challenge reference, submitting player, score, status and
   submission time. It rejects invalid state transitions.
+- Confirming a result completes its accepted challenge in the local workflow;
+  disputed results remain available for review.
 
 The current demo data layer uses repository interfaces with in-memory
 implementations. These implementations are intentionally temporary and do not

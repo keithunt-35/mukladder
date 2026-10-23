@@ -16,4 +16,9 @@ abstract interface class ChallengeRepository {
     required String respondentId,
     required ChallengeStatus response,
   });
+
+  Future<Challenge> completeChallenge({
+    required String challengeId,
+    required String actorId,
+  });
 }

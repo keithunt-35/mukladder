@@ -2,7 +2,18 @@
 
 ## Current phase
 
-Phase 3 — Core challenge workflow.
+Phase 5 — Administration and advanced rules preparation.
+
+## Phase 4 completed on 2026-10-23
+
+- Completed the end-to-end local Normal challenge workflow:
+  creation, response, accepted-match result submission, confirmation and
+  dispute.
+- Confirming a result now transitions the associated challenge to `completed`.
+- The ladder refreshes from confirmed results using the clearly provisional
+  local ranking policy.
+- Official deadlines, walkovers, G.O.D. challenges, cooldowns, penalties,
+  notifications and backend authorization remain intentionally deferred.
 
 ## Provisional ranking calculation completed on 2026-10-23
 
@@ -13,6 +24,8 @@ Phase 3 — Core challenge workflow.
 - Added unit coverage for movement and idempotency protection.
 - This is not the official ranking algorithm; rulebook verification remains
   required before production use.
+- Connected the calculator to the ranking provider so confirmed demo results
+  refresh the displayed ladder.
 
 ## Result submission completed on 2026-10-23
 

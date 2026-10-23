@@ -75,4 +75,27 @@ class InMemoryChallengeRepository implements ChallengeRepository {
     _challenges[index] = updatedChallenge;
     return updatedChallenge;
   }
+
+  @override
+  Future<Challenge> completeChallenge({
+    required String challengeId,
+    required String actorId,
+  }) async {
+    final index = _challenges.indexWhere(
+      (challenge) => challenge.id == challengeId,
+    );
+    if (index == -1) {
+      throw StateError('Challenge was not found.');
+    }
+
+    final challenge = _challenges[index];
+    if (challenge.challengerId != actorId &&
+        challenge.challengedId != actorId) {
+      throw StateError('Only challenge participants can complete a challenge.');
+    }
+
+    final updatedChallenge = challenge.transitionTo(ChallengeStatus.completed);
+    _challenges[index] = updatedChallenge;
+    return updatedChallenge;
+  }
 }
