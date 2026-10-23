@@ -2,11 +2,10 @@ import '../../challenges/domain/challenge.dart';
 import '../../results/domain/match_result.dart';
 import 'ranking_entry.dart';
 
-/// Applies the temporary local ranking policy used by the demo.
+/// Applies the supplied MUK Ladder Rules ranking outcomes locally.
 ///
-/// The official MUK Ladder movement algorithm is still unavailable. This
-/// policy moves a confirmed-result winner immediately above the loser and
-/// preserves the relative order of every other player.
+/// The production implementation must apply the same outcomes in a trusted
+/// transaction. This calculator is retained for deterministic demo behavior.
 class ProvisionalRankingCalculator {
   const ProvisionalRankingCalculator();
 
@@ -35,23 +34,27 @@ class ProvisionalRankingCalculator {
           'The challenge for result ${result.id} was not found.',
         );
       }
-      final winnerId = _winnerId(result.score, challenge);
-      final loserId = winnerId == challenge.challengerId
-          ? challenge.challengedId
-          : challenge.challengerId;
-
-      final winnerIndex = ranking.indexWhere(
-        (entry) => entry.player.id == winnerId,
+      final challengerIndex = ranking.indexWhere(
+        (entry) => entry.player.id == challenge.challengerId,
       );
-      final loserIndex = ranking.indexWhere(
-        (entry) => entry.player.id == loserId,
+      final challengedIndex = ranking.indexWhere(
+        (entry) => entry.player.id == challenge.challengedId,
       );
-      if (winnerIndex == -1 || loserIndex == -1) {
+      if (challengerIndex == -1 || challengedIndex == -1) {
         throw StateError('Both result participants must be ranked players.');
       }
-      if (winnerIndex > loserIndex) {
-        final winner = ranking.removeAt(winnerIndex);
-        ranking.insert(loserIndex, winner);
+      if (_winnerIsChallenger(result.score)) {
+        if (challenge.type == ChallengeType.god) {
+          final challenger = ranking[challengerIndex];
+          ranking[challengerIndex] = ranking[challengedIndex];
+          ranking[challengedIndex] = challenger;
+        } else if (challengerIndex > challengedIndex) {
+          final challenger = ranking.removeAt(challengerIndex);
+          ranking.insert(challengedIndex, challenger);
+        }
+      } else if (challenge.type == ChallengeType.god) {
+        final challenger = ranking.removeAt(challengerIndex);
+        ranking.add(challenger);
       }
     }
 
@@ -61,7 +64,7 @@ class ProvisionalRankingCalculator {
     ];
   }
 
-  static String _winnerId(String score, Challenge challenge) {
+  static bool _winnerIsChallenger(String score) {
     var firstPlayerSets = 0;
     var secondPlayerSets = 0;
     for (final setScore in score.split(',')) {
@@ -87,8 +90,6 @@ class ProvisionalRankingCalculator {
     if (firstPlayerSets == secondPlayerSets) {
       throw FormatException('The confirmed score has no clear winner.');
     }
-    return firstPlayerSets > secondPlayerSets
-        ? challenge.challengerId
-        : challenge.challengedId;
+    return firstPlayerSets > secondPlayerSets;
   }
 }

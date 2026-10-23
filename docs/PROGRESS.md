@@ -4,6 +4,48 @@
 
 Phase 5 — Administration and advanced rules preparation.
 
+## Phase 6 foundation started on 2026-10-23
+
+- Added a dedicated pitfalls log in `docs/PITFALLS.md`.
+- Added G.O.D. challenge creation with explicit mutual-consent workflow:
+  creation remains pending until the challenged player accepts.
+- Added duplicate pending G.O.D. challenge protection.
+- Added a G.O.D. action to each ladder player card with confirmation and
+  success/error feedback.
+- Exact G.O.D. eligibility exceptions and backend authorization remain open
+  pitfalls.
+
+## Phase 5 foundation started on 2026-10-23
+
+- Added guarded Admin and Treasurer routes.
+- Non-privileged demo users receive an explicit access-denied screen.
+- Privileged screens are placeholders only; no administrative or payment
+  mutation is enabled before backend authorization and rule verification.
+
+## Phase 4 rule enforcement completed on 2026-10-23
+
+- Added pure Dart Normal challenge validation for upward movement, the
+  four-position range, 6 a.m.–8 p.m. placement hours and one-to-three-day
+  scheduling.
+- Added same-day response validation.
+- Wired ranking positions and proposed next-day dates into the demo challenge
+  request.
+- The supplied rules are labelled as the 2025 reference; their applicability
+  to the 2026 tournament still needs Ladder Admin confirmation.
+
+## Phase 5 rules engine completed on 2026-10-23
+
+- Added same-day, before-8 p.m. result submission validation when a challenge
+  has a scheduled match date.
+- Implemented the supplied Normal ranking outcomes: challenger wins move the
+  challenger to the challenged position; challenger losses preserve positions.
+- Implemented the supplied G.O.D. outcomes: challenger wins swap positions;
+  challenger losses move the challenger to the bottom.
+- Added explicit two-day cooldown validation for subsequent challenge
+  placement.
+- Walkover automation remains separate because it requires attendance,
+  postponement and administrative event data.
+
 ## Phase 4 completed on 2026-10-23
 
 - Completed the end-to-end local Normal challenge workflow:
@@ -12,8 +54,11 @@ Phase 5 — Administration and advanced rules preparation.
 - Confirming a result now transitions the associated challenge to `completed`.
 - The ladder refreshes from confirmed results using the clearly provisional
   local ranking policy.
-- Official deadlines, walkovers, G.O.D. challenges, cooldowns, penalties,
-  notifications and backend authorization remain intentionally deferred.
+- Added immutable in-memory audit events for result submission, confirmation
+  and dispute transitions.
+- Duplicate-result protection is enforced by the result repository.
+- Walkover automation, scheduled penalties, notifications and backend
+  authorization remain intentionally deferred.
 
 ## Provisional ranking calculation completed on 2026-10-23
 

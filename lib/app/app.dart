@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/auth/application/auth_providers.dart';
+import '../features/auth/domain/app_user.dart';
 import '../features/challenges/application/challenge_providers.dart';
 import '../features/challenges/domain/challenge.dart';
 import '../features/ladder/application/ranking_providers.dart';
@@ -60,6 +61,11 @@ final GoRouter _router = GoRouter(
         ),
       ],
     ),
+    GoRoute(path: '/admin', builder: (context, state) => const AdminScreen()),
+    GoRoute(
+      path: '/treasurer',
+      builder: (context, state) => const TreasurerScreen(),
+    ),
   ],
 );
 
@@ -104,6 +110,31 @@ class LadderScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
     final ranking = ref.watch(rankingProvider);
+    final challenges = ref
+        .watch(challengesProvider)
+        .maybeWhen(data: (items) => items, orElse: () => const <Challenge>[]);
+    final results = ref
+        .watch(resultsProvider)
+        .maybeWhen(data: (items) => items, orElse: () => const <MatchResult>[]);
+    DateTime? cooldownStartedAt;
+    for (final result in results) {
+      if (result.status != ResultStatus.confirmed) {
+        continue;
+      }
+      final matchingChallenges = challenges.where(
+        (item) => item.id == result.challengeId,
+      );
+      final challenge = matchingChallenges.isEmpty
+          ? null
+          : matchingChallenges.first;
+      if (challenge?.challengerId != user.id) {
+        continue;
+      }
+      if (cooldownStartedAt == null ||
+          result.submittedAt.isAfter(cooldownStartedAt)) {
+        cooldownStartedAt = result.submittedAt;
+      }
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -139,7 +170,11 @@ class LadderScreen extends ConsumerWidget {
                 _RankingError(onRetry: () => ref.invalidate(rankingProvider)),
             data: (entries) => entries.isEmpty
                 ? const _EmptyRanking()
-                : _RankingList(entries: entries, currentUserId: user.id),
+                : _RankingList(
+                    entries: entries,
+                    currentUserId: user.id,
+                    cooldownStartedAt: cooldownStartedAt,
+                  ),
           ),
         ],
       ),
@@ -148,10 +183,15 @@ class LadderScreen extends ConsumerWidget {
 }
 
 class _RankingList extends StatelessWidget {
-  const _RankingList({required this.entries, required this.currentUserId});
+  const _RankingList({
+    required this.entries,
+    required this.currentUserId,
+    required this.cooldownStartedAt,
+  });
 
   final List<RankingEntry> entries;
   final String currentUserId;
+  final DateTime? cooldownStartedAt;
 
   @override
   Widget build(BuildContext context) {
@@ -170,10 +210,33 @@ class _RankingList extends StatelessWidget {
                 'Ranking snapshot: ${_formatDate(entry.player.lastActivityAt)}',
               ),
               trailing: canChallenge
-                  ? FilledButton(
-                      onPressed: () =>
-                          _showChallengeDialog(context, entry, currentUserId),
-                      child: const Text('Challenge'),
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        FilledButton(
+                          onPressed: () => _showChallengeDialog(
+                            context,
+                            entry,
+                            currentUserId,
+                            entries
+                                .firstWhere(
+                                  (candidate) =>
+                                      candidate.player.id == currentUserId,
+                                )
+                                .position,
+                            cooldownStartedAt,
+                          ),
+                          child: const Text('Challenge'),
+                        ),
+                        TextButton(
+                          onPressed: () => _createGodChallenge(
+                            context,
+                            entry,
+                            currentUserId,
+                          ),
+                          child: const Text('G.O.D.'),
+                        ),
+                      ],
                     )
                   : const Text('You'),
             ),
@@ -183,10 +246,74 @@ class _RankingList extends StatelessWidget {
     );
   }
 
+  Future<void> _createGodChallenge(
+    BuildContext context,
+    RankingEntry entry,
+    String currentUserId,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create G.O.D. challenge?'),
+        content: Text(
+          'Send a G.O.D. challenge to ${entry.player.displayName}? '
+          'The challenge will require their mutual consent.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Send G.O.D. challenge'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) {
+      return;
+    }
+
+    try {
+      final container = ProviderScope.containerOf(context);
+      await container.read(
+        godChallengeCreationProvider(
+          GodChallengeRequest(
+            challengerId: currentUserId,
+            challengedId: entry.player.id,
+            createdAt: DateTime.now(),
+            proposedDate: DateTime.now().add(const Duration(days: 1)),
+          ),
+        ).future,
+      );
+      container.invalidate(challengesProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'G.O.D. challenge sent to ${entry.player.displayName}.',
+            ),
+          ),
+        );
+      }
+    } on ArgumentError catch (error) {
+      if (context.mounted) {
+        _showChallengeError(context, error.message.toString());
+      }
+    } on StateError catch (error) {
+      if (context.mounted) {
+        _showChallengeError(context, error.message);
+      }
+    }
+  }
+
   Future<void> _showChallengeDialog(
     BuildContext context,
     RankingEntry entry,
     String currentUserId,
+    int currentUserPosition,
+    DateTime? cooldownStartedAt,
   ) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -217,6 +344,10 @@ class _RankingList extends StatelessWidget {
       challengerId: currentUserId,
       challengedId: entry.player.id,
       createdAt: DateTime.now(),
+      challengerPosition: currentUserPosition,
+      challengedPosition: entry.position,
+      proposedDate: DateTime.now().add(const Duration(days: 1)),
+      cooldownStartedAt: cooldownStartedAt,
     );
     try {
       await container.read(challengeCreationProvider(request).future);
@@ -324,6 +455,87 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
+class AdminScreen extends ConsumerWidget {
+  const AdminScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider);
+    if (user.role != AppRole.admin) {
+      return const _RoleDeniedScreen(requiredRole: AppRole.admin);
+    }
+
+    return const _RolePlaceholderScreen(
+      title: 'Admin workspace',
+      message:
+          'Administrative workflows will be added after the official rules '
+          'and Firebase authorization are configured.',
+    );
+  }
+}
+
+class TreasurerScreen extends ConsumerWidget {
+  const TreasurerScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider);
+    if (user.role != AppRole.treasurer) {
+      return const _RoleDeniedScreen(requiredRole: AppRole.treasurer);
+    }
+
+    return const _RolePlaceholderScreen(
+      title: 'Treasurer workspace',
+      message:
+          'Payment-status workflows will be added with protected backend '
+          'data and Firebase authorization.',
+    );
+  }
+}
+
+class _RoleDeniedScreen extends StatelessWidget {
+  const _RoleDeniedScreen({required this.requiredRole});
+
+  final AppRole requiredRole;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Access restricted')),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'This area is restricted to ${requiredRole.label} users. '
+            'The current demo identity has no access.',
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RolePlaceholderScreen extends StatelessWidget {
+  const _RolePlaceholderScreen({required this.title, required this.message});
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(message, textAlign: TextAlign.center),
+        ),
+      ),
+    );
+  }
+}
+
 class ChallengesScreen extends ConsumerWidget {
   const ChallengesScreen({super.key});
 
@@ -407,6 +619,7 @@ class ChallengesScreen extends ConsumerWidget {
             challengeId: challenge.id,
             respondentId: userId,
             response: response,
+            respondedAt: DateTime.now(),
           ),
         ).future,
       );

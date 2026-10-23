@@ -1,12 +1,19 @@
 import '../../challenges/data/challenge_repository.dart';
 import '../../challenges/domain/challenge.dart';
+import '../../audit/data/audit_repository.dart';
+import '../../audit/data/in_memory_audit_repository.dart';
+import '../../challenges/domain/challenge_rules.dart';
 import '../domain/match_result.dart';
 import 'result_repository.dart';
 
 class InMemoryResultRepository implements ResultRepository {
-  InMemoryResultRepository({required this.challengeRepository});
+  InMemoryResultRepository({
+    required this.challengeRepository,
+    AuditRepository? auditRepository,
+  }) : auditRepository = auditRepository ?? InMemoryAuditRepository();
 
   final ChallengeRepository challengeRepository;
+  final AuditRepository auditRepository;
   final List<MatchResult> _results = [];
 
   @override
@@ -31,6 +38,12 @@ class InMemoryResultRepository implements ResultRepository {
         submittedBy != challenge.challengedId) {
       throw StateError('Only challenge participants can submit a result.');
     }
+    if (challenge.proposedDate != null) {
+      ChallengeRules.validateResultSubmission(
+        matchDate: challenge.proposedDate!,
+        submittedAt: submittedAt,
+      );
+    }
     if (!isValidScore(score)) {
       throw FormatException(
         'Use scores such as 6-4, 6-3 with one or more sets.',
@@ -51,6 +64,15 @@ class InMemoryResultRepository implements ResultRepository {
       submittedAt: submittedAt,
     );
     _results.add(result);
+    await auditRepository.recordEvent(
+      actorId: submittedBy,
+      eventType: 'result_submitted',
+      entityType: 'result',
+      entityId: result.id,
+      before: null,
+      after: result.status.name,
+      createdAt: submittedAt,
+    );
     return result;
   }
 
@@ -82,6 +104,15 @@ class InMemoryResultRepository implements ResultRepository {
         actorId: actorId,
       );
     }
+    await auditRepository.recordEvent(
+      actorId: actorId,
+      eventType: 'result_${status.name}',
+      entityType: 'result',
+      entityId: result.id,
+      before: result.status.name,
+      after: updatedResult.status.name,
+      createdAt: DateTime.now(),
+    );
     return updatedResult;
   }
 
