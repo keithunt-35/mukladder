@@ -9,7 +9,7 @@ The Makerere University Tennis Ladder is governed by a detailed set of 12 formal
 
 
 ## Solution
-MUKLadder automates the 12 official MUK Ladder Rules...
+MUKLadder automates the 12 official MUK Ladder Rules that are in the 2026 pdf document
 
 ## Key Features
 - Live ladder ranking (offline-first)
