@@ -25,6 +25,11 @@ reviewed before production release. Items are not silently treated as solved.
    linked to verified accounts.
 8. **Test coverage:** Tests have intentionally not been run during the latest
    implementation steps; run the suite before relying on these changes.
+9. **Notifications are local-first:** Alert history now persists on the
+   device and exposes stale/rejected states, but it does not synchronize with
+   Firebase or resolve conflicts across devices.
+10. **Push delivery is unavailable:** Background and terminated-app delivery
+   requires Firebase Cloud Messaging, platform configuration and permissions.
 
 ## Resolved or documented
 
@@ -35,3 +40,5 @@ reviewed before production release. Items are not silently treated as solved.
 - Duplicate result protection and audit events exist in the local demo.
 - G.O.D. creation is now exposed in the UI, but the challenge is still only
   local in-memory state and is not an official backend placement.
+- The Alerts screen is an in-app local-history surface, not a Firebase Cloud
+  Messaging implementation.

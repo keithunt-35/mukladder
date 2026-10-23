@@ -15,6 +15,32 @@ Phase 5 — Administration and advanced rules preparation.
 - Exact G.O.D. eligibility exceptions and backend authorization remain open
   pitfalls.
 
+## Phase 7 foundation started on 2026-10-23
+
+- Replaced the Admin placeholder with a read-only overview of pending
+  challenges, unresolved results and audit-event counts.
+- Replaced the Treasurer placeholder with a read-only payment-status overview.
+- Kept privileged mutations disabled; the Treasurer cannot modify rankings or
+  grant roles.
+
+## Phase 8 foundation started on 2026-10-23
+
+- Added an in-app Alerts destination and notification model/repository.
+- Pending incoming challenges produce local alert entries.
+- Added device-persisted notification history using `shared_preferences`.
+- Added explicit synchronized, stale and rejected-storage states to the alert
+  snapshot.
+- Added a push-notification service boundary that reports configuration as
+  unavailable until Firebase Cloud Messaging is set up.
+
+## Firebase configuration preparation started on 2026-10-23
+
+- Confirmed that no Firebase project files, project ID, Android Firebase
+  configuration or Firebase dependencies are present.
+- Documented the owner-required Firebase Console and FlutterFire steps in
+  `docs/SETUP.md`.
+- No credentials or external project configuration have been created.
+
 ## Phase 5 foundation started on 2026-10-23
 
 - Added guarded Admin and Treasurer routes.

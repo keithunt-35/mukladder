@@ -52,10 +52,46 @@ The generated debug APK is at
 
 ## Firebase configuration
 
-Firebase setup is not yet complete. When it begins, use separate development
-and production projects where feasible, configure the Android app through the
-standard FlutterFire process, and prefer the Firebase Emulator Suite for local
-development and security-rule tests.
+Firebase setup is not yet complete. Follow this sequence when starting it.
+
+### What the project owner must do
+
+1. Create or select a Firebase project in the Firebase Console. Use a
+   development project first; do not use a production project for this MVP
+   setup.
+2. Register the Android application using the exact Android application ID
+   from `android/app/build.gradle.kts` (or the project's current Gradle
+   configuration). Do not guess this value.
+3. Enable **Authentication > Sign-in method > Email/Password**.
+4. Create a Firestore database in development mode only. The initial rules
+   must be replaced before real participant data is used.
+5. Install or make available the Firebase CLI and FlutterFire CLI on the
+   development machine.
+6. From the repository root, run `flutterfire configure`, select the
+   development project and Android platform, and allow it to generate the
+   Flutter configuration file.
+7. Return the generated project ID and confirm that configuration completed.
+   Do not send passwords, service-account keys, private keys or `.env` files.
+
+### What the implementation will do after that
+
+- Add Firebase Auth, Firestore and FCM Flutter dependencies.
+- Replace `DemoAuthService` behind the existing `AuthService` boundary.
+- Add Firebase initialization in the application entry point.
+- Add registration, login, logout and session restoration.
+- Add Firestore repositories and server-authoritative data boundaries.
+- Add Firestore Security Rules and emulator configuration.
+- Add role checks that cannot be changed by the client.
+- Add FCM initialization only after notification permissions and platform
+  configuration are confirmed.
+
+### Required configuration artifacts
+
+The FlutterFire-generated `lib/firebase_options.dart` and Android Firebase
+configuration are project configuration, not credentials. They may be
+committed when generated for this repository, subject to the team's repository
+policy. Service-account JSON files, private keys, passwords, `.env` files and
+admin credentials must never be committed.
 
 Do not attempt Firebase configuration to try the current demo. It is a later
 development step.

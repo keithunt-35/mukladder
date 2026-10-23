@@ -85,3 +85,37 @@ October for stabilization and demonstration preparation where possible.
   trusted scheduled jobs require backend implementation and confirmation of
   2026 rule applicability.
 - **Pitfalls:** See [PITFALLS.md](PITFALLS.md) before continuing.
+
+## Phase 7 — Admin and Treasurer dashboards
+
+- **Started:** Added role-guarded read-only Admin and Treasurer dashboards.
+- **Admin view:** Pending challenge count, unresolved result count and audit
+  event count.
+- **Treasurer view:** Player payment-status flags without payment credentials
+  or payment processing.
+- **Deferred:** Registration approvals, walkover decisions, ranking overrides,
+  payment updates and role changes until Firebase authorization and audited
+  backend operations are available.
+
+## Phase 8 — Notifications and offline hardening
+
+- **Started:** Added local in-app Alerts for pending incoming challenges.
+- **Implemented locally:** Device-persisted notification history, freshness
+  metadata, stale/rejected-storage indicators and explicit push-service
+  configuration boundary.
+- **Deferred:** Firebase synchronization, conflict resolution and actual
+  foreground/background/terminated-app delivery.
+- **Constraint:** Local alerts must not be presented as push notifications or
+  synchronized backend data.
+
+## Firebase foundation — owner setup required
+
+- **Blocked until owner setup:** Create/select a development Firebase project,
+  register the Android app, enable Email/Password Authentication, create a
+  development Firestore database, install the Firebase and FlutterFire CLIs,
+  and run `flutterfire configure`.
+- **Do not provide:** Passwords, service-account JSON, private keys, admin
+  credentials or `.env` files.
+- **After setup:** Return with the generated project ID and confirmation that
+  FlutterFire configuration completed. Then implement Firebase initialization,
+  authentication, Firestore rules and repositories in that order.

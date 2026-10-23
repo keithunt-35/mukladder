@@ -8,6 +8,8 @@ import '../features/challenges/application/challenge_providers.dart';
 import '../features/challenges/domain/challenge.dart';
 import '../features/ladder/application/ranking_providers.dart';
 import '../features/ladder/domain/ranking_entry.dart';
+import '../features/notifications/application/notification_providers.dart';
+import '../features/notifications/domain/notification.dart';
 import '../features/results/application/result_providers.dart';
 import '../features/results/domain/match_result.dart';
 
@@ -59,6 +61,14 @@ final GoRouter _router = GoRouter(
             ),
           ],
         ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: '/notifications',
+              builder: (context, state) => const NotificationsScreen(),
+            ),
+          ],
+        ),
       ],
     ),
     GoRoute(path: '/admin', builder: (context, state) => const AdminScreen()),
@@ -96,6 +106,11 @@ class AppShell extends StatelessWidget {
             icon: Icon(Icons.sports_tennis_outlined),
             selectedIcon: Icon(Icons.sports_tennis),
             label: 'Challenges',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.notifications_outlined),
+            selectedIcon: Icon(Icons.notifications),
+            label: 'Alerts',
           ),
         ],
       ),
@@ -455,6 +470,101 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
+class NotificationsScreen extends ConsumerWidget {
+  const NotificationsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifications = ref.watch(notificationsProvider);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Alerts')),
+      body: notifications.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stackTrace) =>
+            const Center(child: Text('Unable to load alerts.')),
+        data: (snapshot) => snapshot.notifications.isEmpty
+            ? _NotificationStateView(snapshot: snapshot)
+            : ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  _NotificationSyncBanner(snapshot: snapshot),
+                  for (final notification in snapshot.notifications)
+                    _NotificationTile(notification: notification),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _NotificationStateView extends StatelessWidget {
+  const _NotificationStateView({required this.snapshot});
+
+  final NotificationSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        _NotificationSyncBanner(snapshot: snapshot),
+        const SizedBox(height: 24),
+        const Center(child: Text('No alerts yet.')),
+      ],
+    );
+  }
+}
+
+class _NotificationSyncBanner extends StatelessWidget {
+  const _NotificationSyncBanner({required this.snapshot});
+
+  final NotificationSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final message = switch (snapshot.state) {
+      NotificationSyncState.synchronized => 'Saved on this device',
+      NotificationSyncState.stale => 'These alerts may be out of date',
+      NotificationSyncState.offline => 'Offline: showing saved alerts',
+      NotificationSyncState.rejected =>
+        snapshot.rejectedWrite ?? 'Alert storage was rejected',
+    };
+    return Card(
+      color: snapshot.state == NotificationSyncState.synchronized
+          ? null
+          : Theme.of(context).colorScheme.errorContainer,
+      child: ListTile(
+        leading: const Icon(Icons.sync_problem_outlined),
+        title: Text(message),
+        subtitle: snapshot.lastSyncedAt == null
+            ? null
+            : Text('Last saved: ${snapshot.lastSyncedAt}'),
+      ),
+    );
+  }
+}
+
+class _NotificationTile extends StatelessWidget {
+  const _NotificationTile({required this.notification});
+
+  final AppNotification notification;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: Icon(
+          notification.isRead
+              ? Icons.notifications_none
+              : Icons.notifications_active,
+        ),
+        title: Text(notification.title),
+        subtitle: Text(notification.body),
+      ),
+    );
+  }
+}
+
 class AdminScreen extends ConsumerWidget {
   const AdminScreen({super.key});
 
@@ -465,11 +575,53 @@ class AdminScreen extends ConsumerWidget {
       return const _RoleDeniedScreen(requiredRole: AppRole.admin);
     }
 
-    return const _RolePlaceholderScreen(
-      title: 'Admin workspace',
-      message:
-          'Administrative workflows will be added after the official rules '
-          'and Firebase authorization are configured.',
+    final challenges = ref.watch(challengesProvider);
+    final results = ref.watch(resultsProvider);
+    final audits = ref.watch(auditEventsProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Admin workspace')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text(
+            'Read-only operational overview',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Administrative mutations require Firebase authorization and '
+            'trusted backend transactions.',
+          ),
+          const SizedBox(height: 16),
+          _AdminSummaryCard(
+            title: 'Pending challenges',
+            icon: Icons.pending_actions,
+            value: challenges.maybeWhen(
+              data: (items) =>
+                  '${items.where((item) => item.status.name == 'pending').length}',
+              orElse: () => 'Loading',
+            ),
+          ),
+          _AdminSummaryCard(
+            title: 'Unresolved results',
+            icon: Icons.rule,
+            value: results.maybeWhen(
+              data: (items) =>
+                  '${items.where((item) => item.status == ResultStatus.submitted || item.status == ResultStatus.disputed).length}',
+              orElse: () => 'Loading',
+            ),
+          ),
+          _AdminSummaryCard(
+            title: 'Audit events',
+            icon: Icons.history,
+            value: audits.maybeWhen(
+              data: (items) => '${items.length}',
+              orElse: () => 'Loading',
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -484,11 +636,60 @@ class TreasurerScreen extends ConsumerWidget {
       return const _RoleDeniedScreen(requiredRole: AppRole.treasurer);
     }
 
-    return const _RolePlaceholderScreen(
-      title: 'Treasurer workspace',
-      message:
-          'Payment-status workflows will be added with protected backend '
-          'data and Firebase authorization.',
+    final ranking = ref.watch(rankingProvider);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Treasurer workspace')),
+      body: ranking.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stackTrace) =>
+            const Center(child: Text('Unable to load payment overview.')),
+        data: (entries) => ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text(
+              'Payment-status overview',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Payment status is a flag only. Payment credentials and '
+              'processing are not stored in MUKLadder.',
+            ),
+            const SizedBox(height: 16),
+            ...entries.map(
+              (entry) => ListTile(
+                leading: const Icon(Icons.person_outline),
+                title: Text(entry.player.displayName),
+                subtitle: Text('Position ${entry.position}'),
+                trailing: Text(entry.player.paymentStatus.name),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminSummaryCard extends StatelessWidget {
+  const _AdminSummaryCard({
+    required this.title,
+    required this.icon,
+    required this.value,
+  });
+
+  final String title;
+  final IconData icon;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: ListTile(
+        leading: Icon(icon),
+        title: Text(title),
+        trailing: Text(value),
+      ),
     );
   }
 }
