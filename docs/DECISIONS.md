@@ -41,11 +41,23 @@ Decisions are recorded here before they become hidden assumptions. Statuses:
 ## ADR-004 — State management package
 
 - **Date:** 2026-10-23
-- **Status:** Proposed
+- **Status:** Implemented
 - **Problem:** Choose a maintainable state-management approach.
 - **Options:** Riverpod, Bloc, Provider.
-- **Decision:** Not selected yet. Decide during foundation setup after reviewing
-  team familiarity and current package compatibility.
-- **Reason:** Choosing without that review would create an avoidable dependency.
-- **Trade-offs:** Feature implementation is blocked until the choice is made.
+- **Decision:** Use Riverpod through `flutter_riverpod`.
+- **Reason:** It provides testable dependency injection and application state
+  without requiring generated code for the initial MVP.
+- **Trade-offs:** The team must learn Riverpod's provider lifecycle and avoid
+  putting business logic directly in widgets.
 
+## ADR-005 — Navigation package
+
+- **Date:** 2026-10-23
+- **Status:** Implemented
+- **Problem:** Provide simple, testable navigation for the MVP.
+- **Options:** Flutter Navigator APIs, `go_router`, another routing package.
+- **Decision:** Use `go_router` with an indexed shell for the main destinations.
+- **Reason:** It provides declarative routes and a straightforward path to
+  role-aware routing when real authentication is added.
+- **Trade-offs:** Route configuration is an additional abstraction for the
+  small initial app.

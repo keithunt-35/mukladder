@@ -6,14 +6,14 @@ The confirmed delivery deadline is **1 November 2026**. Prioritize a complete,
 testable end-to-end MVP over unfinished stretch features, and reserve 30–31
 October for stabilization and demonstration preparation where possible.
 
-## 1. Finalize stack and Firebase plan
+## 1. Implement Normal challenge creation
 
-- **Objective:** Resolve state management, Firebase environment strategy and
-  emulator approach.
-- **Acceptance:** A recorded ADR names the selected packages and the setup
-  process contains no secrets or destructive production actions.
+- **Objective:** Add Normal challenge creation using the verified subset of
+  eligibility rules and the existing domain state model.
+- **Acceptance:** Valid demo challenges can be created, invalid/duplicate
+  requests are rejected, and behavior is covered by unit/widget tests.
 - **Dependencies:** None.
-- **Blocked:** Partially blocked until the team confirms Firebase project access.
+- **Blocked:** Partially blocked until the official rules are available.
 
 ## 2. Finalize the data model
 
@@ -23,19 +23,11 @@ October for stabilization and demonstration preparation where possible.
 - **Dependencies:** Task 1.
 - **Blocked:** Yes, if the official rules or stakeholder decisions are missing.
 
-## 3. Establish the application foundation
-
-- **Objective:** Replace the starter shell with a minimal Material 3 app shell,
-  navigation and consistent loading/error patterns.
-- **Acceptance:** The app launches, navigation works and analysis/tests pass.
-- **Dependencies:** Task 1.
-- **Blocked:** No.
-
-## 4. Implement authentication
+## 3. Configure Firebase and implement authentication
 
 - **Objective:** Add registration, login, logout, session restoration and safe
   role-aware routing.
 - **Acceptance:** Unauthorized users cannot access protected data or grant
   themselves roles; tests cover validation and authorization.
-- **Dependencies:** Tasks 1–3 and Firebase configuration.
+- **Dependencies:** Tasks 1–3 and Firebase project configuration.
 - **Blocked:** Yes until Firebase setup is available.

@@ -1,8 +1,22 @@
 # Data Model
 
-This is a proposed model for review during issue #24. It is not yet deployed.
-Field names and rule-sensitive constraints must be finalized before Firebase
-implementation.
+This is the MVP domain model and a proposed Firestore model. It is not yet
+deployed. Field names and rule-sensitive constraints must be finalized before
+Firebase implementation.
+
+## Implemented pure Dart models
+
+- `Player`: identity, display name, activity timestamp, payment-status flag and
+  active state.
+- `RankingEntry`: a player and a positive ladder position.
+- `Challenge`: participants, type, status and creation/proposed-date metadata.
+  It rejects invalid state transitions.
+- `MatchResult`: challenge reference, submitting player, score, status and
+  submission time. It rejects invalid state transitions.
+
+The current demo data layer uses repository interfaces with in-memory
+implementations. These implementations are intentionally temporary and do not
+represent authoritative tournament data.
 
 ## Firestore collections
 
@@ -53,4 +67,3 @@ shape, participant identity and state transitions.
 Payment information is represented only as a status flag; do not store payment
 credentials. Security Rules must prevent unauthorized reads and writes, and
 backend validation must not rely on client-provided role or ranking fields.
-
