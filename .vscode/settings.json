@@ -1,3 +1,4 @@
 {
-    "idf.currentSetup": "/Users/ios/.espressif/v6.1-beta1/esp-idf"
+    "idf.currentSetup": "/Users/ios/.espressif/v6.1-beta1/esp-idf",
+    "java.configuration.updateBuildConfiguration": "interactive"
 }

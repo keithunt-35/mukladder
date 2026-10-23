@@ -5,7 +5,7 @@ class DemoAuthService implements AuthService {
   @override
   AppUser get currentUser => const AppUser(
     id: 'demo-player-1',
-    displayName: 'Demo Player',
+    displayName: 'Tugume Keith',
     role: AppRole.player,
   );
 }

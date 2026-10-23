@@ -34,6 +34,6 @@ rejected writes and unauthorized role/ranking mutations.
 
 ## Current baseline
 
-The repository currently contains only the generated counter widget test.
-Firebase, emulator and device checks are not yet configured.
-
+The repository currently contains domain, repository and widget tests for the
+local demo workflow. Firebase, emulator and device integration checks are not
+yet configured.

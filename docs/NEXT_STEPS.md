@@ -6,24 +6,34 @@ The confirmed delivery deadline is **1 November 2026**. Prioritize a complete,
 testable end-to-end MVP over unfinished stretch features, and reserve 30–31
 October for stabilization and demonstration preparation where possible.
 
-## 1. Implement Normal challenge creation
+## 1. Implement provisional ranking calculation — completed
 
-- **Objective:** Add Normal challenge creation using the verified subset of
-  eligibility rules and the existing domain state model.
-- **Acceptance:** Valid demo challenges can be created, invalid/duplicate
-  requests are rejected, and behavior is covered by unit/widget tests.
+- **Objective:** Apply a clearly labelled provisional ranking calculation after
+  a result is confirmed, without presenting it as the official rule algorithm.
+- **Acceptance:** A confirmed result can be calculated predictably, duplicate
+  application is rejected, and the calculation has unit tests.
 - **Dependencies:** None.
-- **Blocked:** Partially blocked until the official rules are available.
+- **Status:** Pure Dart calculation is implemented and covered by unit tests.
+- **Blocked:** Production use remains blocked until the official rules are
+  available.
 
-## 2. Finalize the data model
+## 2. Integrate provisional ranking refresh into the demo workflow
+
+- **Objective:** Refresh the local ladder after a result is confirmed and make
+  the temporary policy visible in the demo UI.
+- **Acceptance:** Confirming the seeded demo result changes the displayed
+  ranking, and refreshing or repeating the action does not apply it twice.
+- **Dependencies:** Task 1.
+
+## 3. Finalize the data model
 
 - **Objective:** Review `DATA_MODEL.md` against the concept paper and rulebook.
 - **Acceptance:** Collections, fields, relationships, validation and security
   boundaries are approved and documented.
-- **Dependencies:** Task 1.
+- **Dependencies:** Tasks 1–2.
 - **Blocked:** Yes, if the official rules or stakeholder decisions are missing.
 
-## 3. Configure Firebase and implement authentication
+## 4. Configure Firebase and implement authentication
 
 - **Objective:** Add registration, login, logout, session restoration and safe
   role-aware routing.

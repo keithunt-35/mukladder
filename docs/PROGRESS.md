@@ -2,12 +2,57 @@
 
 ## Current phase
 
-Phase 2 — Player profiles and read-only ladder.
+Phase 3 — Core challenge workflow.
+
+## Provisional ranking calculation completed on 2026-10-23
+
+- Added a pure Dart calculator for confirmed results.
+- The explicitly temporary demo policy moves a confirmed winner immediately
+  above the loser while preserving all other relative positions.
+- Rejects missing participants and duplicate application of a confirmed result.
+- Added unit coverage for movement and idempotency protection.
+- This is not the official ranking algorithm; rulebook verification remains
+  required before production use.
+
+## Result submission completed on 2026-10-23
+
+- Added an in-memory result repository connected to the challenge repository.
+- Added provisional score validation for accepted challenges.
+- Added submitted, confirmed and disputed result transitions.
+- Added result submission and confirmation/dispute controls to challenge cards.
+- Prevented duplicate results and unauthorized participant submissions.
+- Added unit and widget tests for submission, confirmation and invalid scores.
+
+## Challenge response workflow completed on 2026-10-23
+
+- Added challenge response operations to the repository interface and
+  in-memory implementation.
+- Seeded an incoming demo challenge for the temporary Tugume Keith identity.
+- Added a dedicated Challenges destination in the application shell.
+- Added Accept and Reject actions for pending incoming challenges.
+- Restricted responses to the challenged player and rejected repeated responses
+  through the domain state-transition rules.
+- Added unit and widget tests for accepted responses and repeated-response
+  rejection.
+- Added newcomer instructions to `README.md` and `docs/SETUP.md` for running
+  and manually trying the local demo workflow.
+
+## Normal challenge creation in progress on 2026-10-23
+
+- Added an in-memory challenge repository and Riverpod challenge providers.
+- Added a Normal challenge confirmation dialog to the ladder list.
+- Added self-challenge and duplicate-pending-challenge validation.
+- Added success and validation-error feedback through snackbars.
+- This is a local demo workflow only; official eligibility, timing and ranking
+  consequences still require the authoritative rulebook.
 
 ## Read-only ladder completed on 2026-10-23
 
 - Connected the in-memory ranking repository through Riverpod providers.
-- Added three clearly marked demo ranking entries.
+- Replaced the three placeholder entries with the 24-player Week 7 Day 5
+  ranking snapshot from the tournament email thread.
+- Kept email addresses out of the seed data because authentication and contact
+  fields are not implemented yet.
 - Replaced the ladder placeholder with a read-only ranking list showing
   position, player name and last activity date.
 - Added loading, empty, error and retry states.
@@ -93,6 +138,18 @@ Phase 2 — Player profiles and read-only ladder.
 - `flutter test` after ranking changes: passed; 12 tests succeeded.
 - `dart format --output=none --set-exit-if-changed lib test` after ranking
   changes: passed.
+- `flutter analyze` after challenge changes: passed with no issues.
+- `flutter test` after challenge changes: passed; 16 tests succeeded.
+- `dart format --output=none --set-exit-if-changed lib test` after challenge
+  changes: passed.
+- `flutter analyze` after response changes: passed with no issues.
+- `flutter test` after response changes: passed; 19 tests succeeded.
+- `dart format --output=none --set-exit-if-changed lib test` after response
+  changes: passed.
+- `flutter analyze` after result changes: passed with no issues.
+- `flutter test` after result changes: passed; 21 tests succeeded.
+- `dart format --output=none --set-exit-if-changed lib test` after result
+  changes: passed.
 
 ## Known limitations and blockers
 
@@ -103,6 +160,5 @@ Phase 2 — Player profiles and read-only ladder.
 
 ## Next
 
-Build the Normal challenge creation flow against the domain models and demo
-repositories. Keep rule-dependent eligibility logic provisional until the
-official rulebook is verified.
+Implement the provisional ranking calculation for confirmed results, keeping
+the algorithm clearly separate until the official rulebook is verified.

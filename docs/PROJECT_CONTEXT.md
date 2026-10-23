@@ -37,10 +37,11 @@ stretch goals and must wait until essential workflows are stable.
 
 ## Current confirmed state (23 October 2026)
 
-The repository is an existing Flutter project using the default starter
-application. It has a `lib/main.dart`, a basic widget smoke test and a minimal
-`pubspec.yaml`. Firebase, authentication, application navigation, a state
-management package and feature modules have not yet been configured.
+The repository contains a working Flutter MVP shell with temporary demo
+authentication, in-memory player/ranking/challenge/result repositories and
+automated tests. The current ranking seed is a 24-player Week 7 Day 5
+snapshot supplied in the tournament email thread. Firebase authentication and
+Firestore persistence are not yet configured.
 
 The implementation must be built incrementally. The complete official MUK
 Ladder Rules, 2025 document is not present in the repository, so rule summaries
@@ -54,4 +55,3 @@ must not be treated as a substitute for the rulebook.
 - Pure Dart rule engine for independently testable business rules
 - State-management package and exact local-storage approach: unresolved;
   see [DECISIONS.md](DECISIONS.md)
-

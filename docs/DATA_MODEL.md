@@ -18,6 +18,11 @@ The current demo data layer uses repository interfaces with in-memory
 implementations. These implementations are intentionally temporary and do not
 represent authoritative tournament data.
 
+The current demo result repository accepts a provisional comma-separated score
+format such as `6-4, 6-3`, only for accepted challenges and their participants.
+This validation is not the official scoring or deadline policy; those rules
+must be verified before Firebase implementation.
+
 ## Firestore collections
 
 ### `users/{uid}`
