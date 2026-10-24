@@ -30,6 +30,9 @@ reviewed before production release. Items are not silently treated as solved.
    Firebase or resolve conflicts across devices.
 10. **Push delivery is unavailable:** Background and terminated-app delivery
    requires Firebase Cloud Messaging, platform configuration and permissions.
+11. **Authentication UI is not finished:** Firebase initializes and exposes the
+   signed-in identity, but registration and login screens are not implemented.
+   Unauthenticated users currently see an explicit sign-in-required state.
 
 ## Resolved or documented
 

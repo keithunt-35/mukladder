@@ -124,6 +124,9 @@ class LadderScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
+    if (user == null) {
+      return const _AuthenticationRequiredScreen();
+    }
     final ranking = ref.watch(rankingProvider);
     final challenges = ref
         .watch(challengesProvider)
@@ -436,6 +439,9 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
+    if (user == null) {
+      return const _AuthenticationRequiredScreen();
+    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Profile')),
@@ -465,6 +471,27 @@ class ProfileScreen extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AuthenticationRequiredScreen extends StatelessWidget {
+  const _AuthenticationRequiredScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Sign in required')),
+      body: const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'No Firebase user is signed in. Authentication screens will be '
+            'added next.',
+            textAlign: TextAlign.center,
+          ),
+        ),
       ),
     );
   }
@@ -571,6 +598,9 @@ class AdminScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
+    if (user == null) {
+      return const _AuthenticationRequiredScreen();
+    }
     if (user.role != AppRole.admin) {
       return const _RoleDeniedScreen(requiredRole: AppRole.admin);
     }
@@ -632,6 +662,9 @@ class TreasurerScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
+    if (user == null) {
+      return const _AuthenticationRequiredScreen();
+    }
     if (user.role != AppRole.treasurer) {
       return const _RoleDeniedScreen(requiredRole: AppRole.treasurer);
     }
@@ -743,6 +776,9 @@ class ChallengesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(currentUserProvider);
+    if (user == null) {
+      return const _AuthenticationRequiredScreen();
+    }
     final challenges = ref.watch(challengesProvider);
 
     return Scaffold(

@@ -10,6 +10,9 @@ import '../domain/notification.dart';
 
 final notificationSeedProvider = Provider<List<AppNotification>>((ref) {
   final user = ref.watch(currentUserProvider);
+  if (user == null) {
+    return const [];
+  }
   final challenges = ref
       .watch(challengesProvider)
       .maybeWhen(data: (items) => items, orElse: () => const <Challenge>[]);

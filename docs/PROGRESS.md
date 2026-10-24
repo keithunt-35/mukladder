@@ -41,6 +41,18 @@ Phase 5 — Administration and advanced rules preparation.
   `docs/SETUP.md`.
 - No credentials or external project configuration have been created.
 
+## Firebase Android foundation connected on 2026-10-24
+
+- Added the generated `firebase_options.dart` configuration.
+- Added `firebase_core`, `firebase_auth` and `cloud_firestore` dependencies.
+- Initialized Firebase before the application starts.
+- Replaced the current-user provider with a Firebase Auth-backed service.
+- Added an explicit authentication-required state when no Firebase user is
+  signed in; the demo identity is no longer silently used after Firebase
+  initialization.
+- Registration, login, logout, Firestore repositories, Security Rules and FCM
+  remain the next Firebase integration tasks.
+
 ## Phase 5 foundation started on 2026-10-23
 
 - Added guarded Admin and Treasurer routes.

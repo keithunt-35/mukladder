@@ -119,3 +119,12 @@ October for stabilization and demonstration preparation where possible.
 - **After setup:** Return with the generated project ID and confirmation that
   FlutterFire configuration completed. Then implement Firebase initialization,
   authentication, Firestore rules and repositories in that order.
+
+## Firebase foundation — connected
+
+- **Completed:** Android Firebase configuration, Firebase startup
+  initialization and Firebase Auth identity boundary.
+- **Current behavior:** Users without a Firebase session see an explicit
+  authentication-required state.
+- **Next:** Implement email/password registration, login, logout and session
+  restoration, then protect Firestore access with Security Rules.

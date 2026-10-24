@@ -93,8 +93,9 @@ committed when generated for this repository, subject to the team's repository
 policy. Service-account JSON files, private keys, passwords, `.env` files and
 admin credentials must never be committed.
 
-Do not attempt Firebase configuration to try the current demo. It is a later
-development step.
+Firebase configuration is now present for the Android development project.
+The app initializes Firebase at startup, but no user is signed in until the
+registration and login screens are implemented.
 
 Never commit service-account keys, private keys, passwords, `.env` files or
 production credentials. Do not enable billing or make destructive production
