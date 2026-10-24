@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1012285344056",
+    "project_id": "mukladder",
+    "storage_bucket": "mukladder.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1012285344056:android:b765815f6fc9b09e4d59cd",
+        "android_client_info": {
+          "package_name": "com.example.mukladder"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDUl2PqgtXD0XIRJkf8uR5TDclZikrpcMg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
