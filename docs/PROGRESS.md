@@ -53,7 +53,16 @@ Phase 5 — Administration and advanced rules preparation.
 - Added registration, login, logout and reactive session restoration.
 - Added Firebase authentication error handling and player profile creation.
 - Added initial Firestore Security Rules and Firebase CLI rules configuration.
-- Firestore feature repositories and FCM remain next.
+- Added Firestore-backed ranking, challenge, result, audit and notification
+  repositories.
+- Added Firebase Messaging initialization for notification permission and
+  foreground/background delivery hooks.
+- Android debug build succeeds with the Firebase integration.
+- Seeded the verified 24-player Week 7 Day 5 snapshot into the development
+  Firestore `players` and `rankings` collections. The seed is not linked to
+  Firebase Auth accounts until participant account onboarding is completed.
+- Trusted server-side ranking/result transitions and Emulator Suite tests
+  remain before production deployment.
 
 ## Phase 5 foundation started on 2026-10-23
 

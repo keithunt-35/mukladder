@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../auth/application/auth_providers.dart';
 import '../../challenges/application/challenge_providers.dart';
 import '../../challenges/domain/challenge.dart';
+import '../data/firestore_notification_repository.dart';
 import '../data/persistent_notification_repository.dart';
 import '../data/notification_repository.dart';
 import '../domain/notification.dart';
@@ -30,10 +31,14 @@ final notificationSeedProvider = Provider<List<AppNotification>>((ref) {
 });
 
 final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
-  return PersistentNotificationRepository(
-    seedNotifications: ref.watch(notificationSeedProvider),
-    preferences: SharedPreferencesAsync(),
-  );
+  final user = ref.watch(currentUserProvider);
+  if (user == null) {
+    return PersistentNotificationRepository(
+      seedNotifications: const [],
+      preferences: SharedPreferencesAsync(),
+    );
+  }
+  return FirestoreNotificationRepository(recipientId: user.id);
 });
 
 final notificationsProvider = FutureProvider<NotificationSnapshot>((ref) {

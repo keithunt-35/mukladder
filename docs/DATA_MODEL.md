@@ -1,8 +1,8 @@
 # Data Model
 
-This is the MVP domain model and a proposed Firestore model. It is not yet
-deployed. Field names and rule-sensitive constraints must be finalized before
-Firebase implementation.
+This is the MVP domain model and Firestore model. The development project now
+contains the initial 24-player and ranking snapshot. Field names and
+rule-sensitive constraints must still be finalized before production use.
 
 ## Implemented pure Dart models
 

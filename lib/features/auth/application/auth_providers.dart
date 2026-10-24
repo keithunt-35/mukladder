@@ -13,5 +13,7 @@ final authStateProvider = StreamProvider<AppUser?>((ref) {
 });
 
 final currentUserProvider = Provider<AppUser?>((ref) {
-  return ref.watch(authStateProvider).valueOrNull;
+  return ref
+      .watch(authStateProvider)
+      .maybeWhen(data: (user) => user, orElse: () => null);
 });

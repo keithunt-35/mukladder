@@ -73,17 +73,20 @@ Firebase setup is not yet complete. Follow this sequence when starting it.
 7. Return the generated project ID and confirm that configuration completed.
    Do not send passwords, service-account keys, private keys or `.env` files.
 
-### What the implementation will do after that
+### What the implementation now does
 
-- Add Firebase Auth, Firestore and FCM Flutter dependencies.
-- Replace `DemoAuthService` behind the existing `AuthService` boundary.
-- Add Firebase initialization in the application entry point.
-- Add registration, login, logout and session restoration.
-- Add Firestore repositories and server-authoritative data boundaries.
-- Add Firestore Security Rules and emulator configuration.
-- Add role checks that cannot be changed by the client.
-- Add FCM initialization only after notification permissions and platform
-  configuration are confirmed.
+- Uses Firebase Auth, Firestore and Firebase Messaging.
+- Initializes Firebase before the application starts.
+- Provides registration, login, logout and session restoration.
+- Uses Firestore repositories for ranking, challenges, results, audit reads and
+  notification history.
+- Protects client access with the checked-in Firestore Security Rules.
+- Requests notification permission and registers foreground/background FCM
+  handlers.
+
+The remaining production requirement is a trusted backend for ranking
+transactions, official result transitions and audit-event writes. The mobile
+client deliberately cannot write rankings or audit events.
 
 ### Required configuration artifacts
 

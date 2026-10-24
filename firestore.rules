@@ -28,7 +28,8 @@ service cloud.firestore {
       allow read: if isSelf(uid) || isAdmin();
       allow update: if isSelf(uid)
         && request.resource.data.role == resource.data.role
-        && request.resource.data.uid == resource.data.uid;
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.email == resource.data.email;
       allow delete: if false;
     }
 
@@ -47,7 +48,11 @@ service cloud.firestore {
       allow create: if signedIn()
         && request.resource.data.challengerId == request.auth.uid;
       allow update: if signedIn()
-        && (resource.data.challengedId == request.auth.uid || isAdmin());
+        && (resource.data.challengedId == request.auth.uid || isAdmin())
+        && request.resource.data.challengerId == resource.data.challengerId
+        && request.resource.data.challengedId == resource.data.challengedId
+        && request.resource.data.type == resource.data.type
+        && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if isAdmin();
     }
 
@@ -61,7 +66,14 @@ service cloud.firestore {
               || get(/databases/$(database)/documents/challenges/$(resource.data.challengeId))
                 .data.challengedId == request.auth.uid)));
       allow create: if signedIn()
-        && request.resource.data.submittedBy == request.auth.uid;
+        && request.resource.data.submittedBy == request.auth.uid
+        && exists(/databases/$(database)/documents/challenges/$(request.resource.data.challengeId))
+        && get(/databases/$(database)/documents/challenges/$(request.resource.data.challengeId))
+          .data.status == 'accepted'
+        && (get(/databases/$(database)/documents/challenges/$(request.resource.data.challengeId))
+          .data.challengerId == request.auth.uid
+          || get(/databases/$(database)/documents/challenges/$(request.resource.data.challengeId))
+            .data.challengedId == request.auth.uid);
       allow update: if isAdmin();
       allow delete: if false;
     }
@@ -80,7 +92,10 @@ service cloud.firestore {
       allow read: if signedIn()
         && resource.data.recipientId == request.auth.uid;
       allow update: if signedIn()
-        && resource.data.recipientId == request.auth.uid;
+        && resource.data.recipientId == request.auth.uid
+        && request.resource.data.recipientId == resource.data.recipientId
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['readAt']);
       allow create, delete: if false;
     }
   }

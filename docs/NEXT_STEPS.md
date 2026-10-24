@@ -125,8 +125,9 @@ October for stabilization and demonstration preparation where possible.
 - **Completed:** Android Firebase configuration, Firebase startup
   initialization, Firebase Auth identity boundary, email/password
   registration, login, logout, session restoration, player profile creation
-  and initial Firestore rules.
+  initial Firestore rules, Firestore-backed ranking/challenge/result/audit
+  repositories, Firestore notification history and FCM initialization.
 - **Current behavior:** Users without a Firebase session see an explicit
   authentication-required state.
-- **Next:** Add Firestore-backed ranking, player, challenge, result and
-  notification repositories, then test rules in the Firebase Emulator Suite.
+- **Next:** Add trusted server-side ranking/result transitions, configure the
+  Firebase Emulator Suite, and test/deploy the rules after review.

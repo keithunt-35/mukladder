@@ -21,8 +21,9 @@ reviewed before production release. Items are not silently treated as solved.
    is only a local consent representation.
 6. **Ranking history:** The demo recalculates a list but does not yet persist
    versioned ranking history or a transaction ID.
-7. **Participant identity:** Demo IDs and names are seeded locally and are not
-   linked to verified accounts.
+7. **Participant identity:** The development Firestore seed uses stable
+   `player-1` through `player-24` IDs and is not linked to verified Firebase
+   Auth accounts yet.
 8. **Test coverage:** Tests have intentionally not been run during the latest
    implementation steps; run the suite before relying on these changes.
 9. **Notifications are local-first:** Alert history now persists on the

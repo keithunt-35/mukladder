@@ -27,7 +27,11 @@ class FirebaseAuthService implements AuthService {
       email: email.trim(),
       password: password,
     );
-    return _loadAppUser(credential.user);
+    final appUser = await _loadAppUser(credential.user);
+    if (appUser == null) {
+      throw StateError('Firebase returned no signed-in user.');
+    }
+    return appUser;
   }
 
   @override

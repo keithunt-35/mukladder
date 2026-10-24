@@ -878,26 +878,6 @@ class _RoleDeniedScreen extends StatelessWidget {
   }
 }
 
-class _RolePlaceholderScreen extends StatelessWidget {
-  const _RolePlaceholderScreen({required this.title, required this.message});
-
-  final String title;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(message, textAlign: TextAlign.center),
-        ),
-      ),
-    );
-  }
-}
-
 class ChallengesScreen extends ConsumerWidget {
   const ChallengesScreen({super.key});
 
