@@ -94,8 +94,17 @@ policy. Service-account JSON files, private keys, passwords, `.env` files and
 admin credentials must never be committed.
 
 Firebase configuration is now present for the Android development project.
-The app initializes Firebase at startup, but no user is signed in until the
-registration and login screens are implemented.
+The app initializes Firebase at startup and includes email/password
+registration, login, logout and session restoration.
+
+To deploy the checked-in Firestore rules after reviewing them:
+
+```bash
+firebase use mukladder
+firebase deploy --only firestore:rules
+```
+
+Do not deploy rules to a production project without explicit approval.
 
 Never commit service-account keys, private keys, passwords, `.env` files or
 production credentials. Do not enable billing or make destructive production

@@ -8,10 +8,10 @@ final authServiceProvider = Provider<AuthService>((ref) {
   return FirebaseAuthService();
 });
 
+final authStateProvider = StreamProvider<AppUser?>((ref) {
+  return ref.watch(authServiceProvider).authStateChanges;
+});
+
 final currentUserProvider = Provider<AppUser?>((ref) {
-  try {
-    return ref.watch(authServiceProvider).currentUser;
-  } on StateError {
-    return null;
-  }
+  return ref.watch(authStateProvider).valueOrNull;
 });

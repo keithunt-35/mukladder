@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../features/auth/application/auth_providers.dart';
 import '../features/auth/domain/app_user.dart';
@@ -470,6 +471,11 @@ class ProfileScreen extends ConsumerWidget {
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          FilledButton.tonal(
+            onPressed: () => ref.read(authServiceProvider).signOut(),
+            child: const Text('Sign out'),
+          ),
         ],
       ),
     );
@@ -481,17 +487,139 @@ class _AuthenticationRequiredScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return const AuthScreen();
+  }
+}
+
+class AuthScreen extends ConsumerStatefulWidget {
+  const AuthScreen({super.key});
+
+  @override
+  ConsumerState<AuthScreen> createState() => _AuthScreenState();
+}
+
+class _AuthScreenState extends ConsumerState<AuthScreen> {
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _displayNameController = TextEditingController();
+  bool _registering = false;
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _displayNameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final displayName = _displayNameController.text.trim();
+    if (!email.contains('@') || password.length < 6) {
+      setState(
+        () => _error =
+            'Enter a valid email and a password of at least 6 characters.',
+      );
+      return;
+    }
+    if (_registering && displayName.isEmpty) {
+      setState(() => _error = 'Enter your display name.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final service = ref.read(authServiceProvider);
+      if (_registering) {
+        await service.register(
+          email: email,
+          password: password,
+          displayName: displayName,
+        );
+      } else {
+        await service.signIn(email: email, password: password);
+      }
+    } on FirebaseAuthException catch (error) {
+      setState(() => _error = _authErrorMessage(error.code));
+    } on StateError catch (error) {
+      setState(() => _error = error.message);
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  String _authErrorMessage(String code) => switch (code) {
+    'email-already-in-use' => 'That email is already registered.',
+    'invalid-credential' ||
+    'wrong-password' ||
+    'user-not-found' => 'The email or password is incorrect.',
+    'weak-password' => 'Choose a stronger password.',
+    'invalid-email' => 'Enter a valid email address.',
+    _ => 'Authentication failed. Please try again.',
+  };
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Sign in required')),
-      body: const Center(
-        child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'No Firebase user is signed in. Authentication screens will be '
-            'added next.',
-            textAlign: TextAlign.center,
+      appBar: AppBar(title: const Text('MUKLadder sign in')),
+      body: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          if (_registering)
+            TextField(
+              controller: _displayNameController,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(labelText: 'Display name'),
+            ),
+          TextField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(labelText: 'Email'),
           ),
-        ),
+          TextField(
+            controller: _passwordController,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Password'),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: _busy ? null : _submit,
+            child: Text(
+              _busy
+                  ? 'Please wait...'
+                  : _registering
+                  ? 'Create account'
+                  : 'Sign in',
+            ),
+          ),
+          TextButton(
+            onPressed: _busy
+                ? null
+                : () => setState(() {
+                    _registering = !_registering;
+                    _error = null;
+                  }),
+            child: Text(
+              _registering
+                  ? 'Already have an account? Sign in'
+                  : 'New player? Create an account',
+            ),
+          ),
+        ],
       ),
     );
   }

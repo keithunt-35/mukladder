@@ -50,8 +50,10 @@ Phase 5 — Administration and advanced rules preparation.
 - Added an explicit authentication-required state when no Firebase user is
   signed in; the demo identity is no longer silently used after Firebase
   initialization.
-- Registration, login, logout, Firestore repositories, Security Rules and FCM
-  remain the next Firebase integration tasks.
+- Added registration, login, logout and reactive session restoration.
+- Added Firebase authentication error handling and player profile creation.
+- Added initial Firestore Security Rules and Firebase CLI rules configuration.
+- Firestore feature repositories and FCM remain next.
 
 ## Phase 5 foundation started on 2026-10-23
 

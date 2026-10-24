@@ -123,8 +123,10 @@ October for stabilization and demonstration preparation where possible.
 ## Firebase foundation — connected
 
 - **Completed:** Android Firebase configuration, Firebase startup
-  initialization and Firebase Auth identity boundary.
+  initialization, Firebase Auth identity boundary, email/password
+  registration, login, logout, session restoration, player profile creation
+  and initial Firestore rules.
 - **Current behavior:** Users without a Firebase session see an explicit
   authentication-required state.
-- **Next:** Implement email/password registration, login, logout and session
-  restoration, then protect Firestore access with Security Rules.
+- **Next:** Add Firestore-backed ranking, player, challenge, result and
+  notification repositories, then test rules in the Firebase Emulator Suite.
