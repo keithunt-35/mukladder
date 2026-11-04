@@ -10,8 +10,9 @@ The Makerere University Tennis Ladder is governed by a detailed set of 12 formal
 
 ## Solution
 MUKLadder is being built to automate the official MUK Ladder rules while
-keeping ranking changes reliable and auditable. The current prototype uses
-local demo data; Firebase integration is not configured yet.
+keeping ranking changes reliable and auditable. The Android app uses Firebase
+Auth and Firestore. Its ladder screen listens to the development ranking
+collection; the starter ranking is seeded data, not an automated rules engine.
 
 ## Key Features
 - Live ladder ranking (offline-first)
@@ -73,24 +74,15 @@ flutter devices
 flutter run -d <device-id>
 ```
 
-### Try the current demo flow
+### Try the current app
 
-The current app runs in clearly labelled **Demo mode** and does not require a
-Firebase project or login account.
+The current app requires a sign-in to the configured Firebase project.
 
 1. Open the **Ladder** tab.
-2. Review the Week 7 Day 5 ranking snapshot, seeded from the tournament email:
-   - 24 real tournament participants are listed in their reported positions.
-   - The temporary demo identity is mapped to Tugume Keith.
-3. Tap **Challenge** beside another player.
-4. Confirm **Send challenge**.
-5. Open the **Challenges** tab.
-6. Review the seeded incoming challenge.
-7. Tap **Accept** or **Reject**.
-8. Open **Profile** to view the temporary demo identity for Tugume Keith.
-
-Demo changes are stored in memory and reset when the application restarts. They
-are not official tournament records.
+2. View the current ranking feed. The development Firestore collection
+   currently contains a 24-player Week 7 Day 5 seed.
+3. Open **Profile** to see your account and any role-based workspace links.
+4. Admin accounts can open the read-only operational overview.
 
 ### Run the checks
 
@@ -105,9 +97,11 @@ The debug APK is written to
 
 ## Current limitations
 
-- Firebase Authentication and Firestore are not configured.
-- Data is held in memory for the current demo.
-- There is no real registration or login flow yet.
+- The ranking feed is live, but its initial development data is a static seed.
+- The full official rules document and confirmation of 2026 rule applicability
+  are still needed.
+- Trusted backend ranking transitions and administrative mutations are not
+  implemented; the current admin dashboard is read-only.
 - Result submission, ranking updates, notifications and administrative
   dashboards are not implemented yet.
 - Rule-dependent behavior must be verified against the official MUK Ladder

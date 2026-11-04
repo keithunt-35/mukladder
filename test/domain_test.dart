@@ -91,20 +91,20 @@ void main() {
         id: 'result-1',
         challengeId: challenge.id,
         submittedBy: challenge.challengerId,
-        score: '4-6, 3-6',
+        score: '6-4, 6-3',
         status: ResultStatus.confirmed,
         submittedAt: DateTime(2026, 10, 23),
       );
       final entries = [
-        RankingEntry(position: 1, player: player),
         RankingEntry(
-          position: 2,
+          position: 1,
           player: Player(
             id: 'player-2',
             displayName: 'Opponent',
             lastActivityAt: DateTime(2026, 10, 22),
           ),
         ),
+        RankingEntry(position: 2, player: player),
       ];
 
       final updated = const ProvisionalRankingCalculator().calculate(
@@ -113,7 +113,7 @@ void main() {
         results: [result],
       );
 
-      expect(updated.map((entry) => entry.player.id), ['player-2', 'player-1']);
+      expect(updated.map((entry) => entry.player.id), ['player-1', 'player-2']);
       expect(updated.map((entry) => entry.position), [1, 2]);
     });
 

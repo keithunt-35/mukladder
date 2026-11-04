@@ -31,9 +31,16 @@ reviewed before production release. Items are not silently treated as solved.
    Firebase or resolve conflicts across devices.
 10. **Push delivery is unavailable:** Background and terminated-app delivery
    requires Firebase Cloud Messaging, platform configuration and permissions.
-11. **Authentication UI is not finished:** Firebase initializes and exposes the
-   signed-in identity, but registration and login screens are not implemented.
-   Unauthenticated users currently see an explicit sign-in-required state.
+11. **Authentication uses Firebase profile roles:** Registration and sign-in
+   screens are implemented. Missing or unavailable profiles must never grant
+   privileged roles; server-side authorization remains authoritative.
+12. **Ranking seed is static:** The app now listens to Firestore ranking
+   snapshots, but the development 24-player seed is not recalculated from
+   results. The provisional client calculator is not the official rules
+   engine.
+13. **Admin workspace is read-only:** The dashboard shows Firestore-backed
+   counts. No trusted, audited backend actions exist yet for approvals,
+   result decisions, ranking changes, role updates or payment changes.
 
 ## Resolved or documented
 

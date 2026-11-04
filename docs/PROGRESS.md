@@ -269,3 +269,36 @@ Phase 5 — Administration and advanced rules preparation.
 
 Implement the provisional ranking calculation for confirmed results, keeping
 the algorithm clearly separate until the official rulebook is verified.
+
+## Windows Android device setup — 2026-11-04
+
+- Diagnosed Android debug build failures on Windows: the project is on `D:`
+  while the Pub package cache was on `C:`, and Kotlin incremental compilation
+  failed while registering cross-drive cache files.
+- Configured Android Gradle to run Kotlin compilation in-process without
+  incremental or parallel compilation, and ignored generated `android/.kotlin`
+  cache files.
+- Documented using a Pub cache on the project drive in `docs/SETUP.md`.
+- Built the debug APK successfully and installed/launched it on the connected
+  SM X115 Android device. The device reports the MUKLadder MainActivity resumed.
+- `flutter run` still needs an online dependency check unless invoked with
+  `--no-pub`; a `pub.dev` DNS lookup failed during this session.
+
+## Branding, live ladder and Admin overview — 2026-11-04
+
+- Added an original vector tennis/ladder brand mark and applied a consistent
+  green Material 3 theme and refreshed player, sign-in, profile and dashboard
+  surfaces.
+- Removed the in-app demo ranking fixture. The app now listens to ordered
+  Firestore `rankings` snapshots, so UI changes appear when ranking documents
+  change; the development collection itself still begins with a static seed.
+- Added a refreshed Admin overview with role checks, Firestore-backed counts
+  for players, pending challenges, unresolved results and audit events, plus a
+  refresh/retry path.
+- Kept Admin workspace read-only. The rulebook and trusted backend needed for
+  official ranking changes and audited admin mutations are not present.
+- Updated setup, project context, architecture, data model, README and next
+  steps to distinguish the live read path from the still-static seed and
+  provisional client-side rule logic.
+- `flutter analyze --no-pub`: passed.
+- `flutter test --no-pub`: passed, 25 tests.

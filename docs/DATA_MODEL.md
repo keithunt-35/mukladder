@@ -1,8 +1,11 @@
 # Data Model
 
-This is the MVP domain model and Firestore model. The development project now
+This is the MVP domain model and Firestore model. The development project
 contains the initial 24-player and ranking snapshot. Field names and
 rule-sensitive constraints must still be finalized before production use.
+Firestore ranking reads are ordered by position and the app listens for live
+document changes; the seeded ranking is not automatically recalculated after
+game results.
 
 ## Implemented pure Dart models
 
@@ -19,14 +22,14 @@ rule-sensitive constraints must still be finalized before production use.
   events. The production implementation must write equivalent events in a
   trusted backend transaction.
 
-The current demo data layer uses repository interfaces with in-memory
-implementations. These implementations are intentionally temporary and do not
-represent authoritative tournament data.
+Firestore repositories are used by the connected app. In-memory repositories
+remain for isolated tests and local domain demonstrations; they are not
+authoritative tournament data.
 
 The current demo result repository accepts a provisional comma-separated score
 format such as `6-4, 6-3`, only for accepted challenges and their participants.
-This validation is not the official scoring or deadline policy; those rules
-must be verified before Firebase implementation.
+The client-side workflow is not a trusted backend rule implementation. The
+official scoring and deadline policy must be verified before production use.
 
 ## Firestore collections
 

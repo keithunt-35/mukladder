@@ -19,6 +19,18 @@ class FirestoreRankingRepository implements RankingRepository {
     return snapshot.docs.map(_fromDocument).toList(growable: false);
   }
 
+  @override
+  Stream<List<RankingEntry>> watchRanking() {
+    return _firestore
+        .collection('rankings')
+        .orderBy('position')
+        .snapshots()
+        .map(
+          (snapshot) =>
+              snapshot.docs.map(_fromDocument).toList(growable: false),
+        );
+  }
+
   RankingEntry _fromDocument(
     QueryDocumentSnapshot<Map<String, dynamic>> document,
   ) {

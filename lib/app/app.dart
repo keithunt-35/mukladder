@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'app_brand.dart';
+import '../features/admin/application/admin_overview_provider.dart';
 import '../features/auth/application/auth_providers.dart';
 import '../features/auth/domain/app_user.dart';
 import '../features/challenges/application/challenge_providers.dart';
@@ -22,7 +24,15 @@ class MukladderApp extends StatelessWidget {
     return MaterialApp.router(
       title: 'MUKLadder',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF0B5D3B),
+          surface: const Color(0xFFF5F7F2),
+        ),
+        scaffoldBackgroundColor: const Color(0xFFF5F7F2),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFF5F7F2),
+          foregroundColor: Color(0xFF17362A),
+        ),
         useMaterial3: true,
       ),
       routerConfig: _router,
@@ -156,28 +166,35 @@ class LadderScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('MUKLadder'),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Center(
-              child: Text(
-                'Demo mode',
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
+      appBar: AppBar(title: const AppBrandLockup(compact: true)),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+        children: [
+          _LadderHero(
+            displayName: user.displayName,
+            playerPosition: ranking.maybeWhen(
+              data: (entries) => _positionOf(entries, user.id),
+              orElse: () => null,
+            ),
+            playerCount: ranking.maybeWhen(
+              data: (entries) => entries.length,
+              orElse: () => null,
             ),
           ),
-        ],
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            'Welcome, ${user.displayName}',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
           const SizedBox(height: 24),
+          Text(
+            'Current standings',
+            style: Theme.of(context).textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Standings follow the ranking feed configured for this tournament.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
           ranking.when(
             loading: () => const Center(
               child: Padding(
@@ -214,50 +231,63 @@ class _RankingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentPosition = _positionOf(entries, currentUserId);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Live ranking', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 8),
         ...entries.map((entry) {
-          final canChallenge = entry.player.id != currentUserId;
+          final isCurrentPlayer = entry.player.id == currentUserId;
+          final canChallenge = !isCurrentPlayer && currentPosition != null;
           return Card(
+            color: isCurrentPlayer
+                ? Theme.of(context).colorScheme.primaryContainer
+                : Colors.white,
+            margin: const EdgeInsets.only(bottom: 10),
             child: ListTile(
-              leading: CircleAvatar(child: Text('${entry.position}')),
-              title: Text(entry.player.displayName),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 6,
+              ),
+              leading: _RankBadge(position: entry.position),
+              title: Text(
+                entry.player.displayName,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
               subtitle: Text(
-                'Ranking snapshot: ${_formatDate(entry.player.lastActivityAt)}',
+                'Last active ${_formatDate(entry.player.lastActivityAt)}',
               ),
               trailing: canChallenge
-                  ? Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        FilledButton(
-                          onPressed: () => _showChallengeDialog(
+                  ? PopupMenuButton<String>(
+                      tooltip: 'Challenge ${entry.player.displayName}',
+                      icon: const Icon(Icons.more_vert),
+                      onSelected: (action) {
+                        if (action == 'normal') {
+                          _showChallengeDialog(
                             context,
                             entry,
                             currentUserId,
-                            entries
-                                .firstWhere(
-                                  (candidate) =>
-                                      candidate.player.id == currentUserId,
-                                )
-                                .position,
+                            currentPosition,
                             cooldownStartedAt,
-                          ),
-                          child: const Text('Challenge'),
+                          );
+                        } else {
+                          _createGodChallenge(context, entry, currentUserId);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(
+                          value: 'normal',
+                          child: Text('Normal challenge'),
                         ),
-                        TextButton(
-                          onPressed: () => _createGodChallenge(
-                            context,
-                            entry,
-                            currentUserId,
-                          ),
-                          child: const Text('G.O.D.'),
+                        PopupMenuItem(
+                          value: 'god',
+                          child: Text('G.O.D. challenge'),
                         ),
                       ],
                     )
-                  : const Text('You'),
+                  : Text(
+                      isCurrentPlayer ? 'You' : 'Join the ladder to challenge',
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
             ),
           );
         }),
@@ -340,7 +370,7 @@ class _RankingList extends StatelessWidget {
         title: const Text('Create Normal challenge?'),
         content: Text(
           'Send a challenge to ${entry.player.displayName}? '
-          'This demo request will remain pending.',
+          'You can follow its status from the Challenges tab.',
         ),
         actions: [
           TextButton(
@@ -399,6 +429,155 @@ class _RankingList extends StatelessWidget {
   }
 }
 
+int? _positionOf(List<RankingEntry> entries, String playerId) {
+  for (final entry in entries) {
+    if (entry.player.id == playerId) {
+      return entry.position;
+    }
+  }
+  return null;
+}
+
+class _LadderHero extends StatelessWidget {
+  const _LadderHero({
+    required this.displayName,
+    required this.playerPosition,
+    required this.playerCount,
+  });
+
+  final String displayName;
+  final int? playerPosition;
+  final int? playerCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0B5D3B), Color(0xFF174B39)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0B5D3B).withValues(alpha: 0.16),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const AppBrandMark(size: 42),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'MAKERERE UNIVERSITY',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Colors.white.withValues(alpha: 0.82),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              const Icon(Icons.sports_tennis, color: Color(0xFFD8F06A)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Welcome back,',
+            style: Theme.of(context).textTheme.bodyLarge
+                ?.copyWith(color: Colors.white.withValues(alpha: 0.8)),
+          ),
+          Text(
+            displayName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.headlineSmall
+                ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              _HeroStat(
+                label: 'YOUR RANK',
+                value: playerPosition == null ? '—' : '#$playerPosition',
+              ),
+              const SizedBox(width: 28),
+              _HeroStat(
+                label: 'PLAYERS',
+                value: playerCount?.toString() ?? '—',
+              ),
+              const Spacer(),
+              Icon(Icons.trending_up, color: colors.tertiary),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroStat extends StatelessWidget {
+  const _HeroStat({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Colors.white.withValues(alpha: 0.72),
+            letterSpacing: 0.8,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: Theme.of(context).textTheme.titleLarge
+              ?.copyWith(color: Colors.white, fontWeight: FontWeight.w800),
+        ),
+      ],
+    );
+  }
+}
+
+class _RankBadge extends StatelessWidget {
+  const _RankBadge({required this.position});
+
+  final int position;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final highlighted = position <= 3;
+    return CircleAvatar(
+      radius: 22,
+      backgroundColor: highlighted
+          ? colors.tertiaryContainer
+          : colors.surfaceContainerHighest,
+      foregroundColor: highlighted
+          ? colors.onTertiaryContainer
+          : colors.onSurfaceVariant,
+      child: Text(
+        '$position',
+        style: const TextStyle(fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+}
+
 class _EmptyRanking extends StatelessWidget {
   const _EmptyRanking();
 
@@ -445,14 +624,12 @@ class ProfileScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profile')),
+      appBar: AppBar(title: const AppBrandLockup(compact: true)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          CircleAvatar(
-            radius: 36,
-            child: Text(user.displayName.substring(0, 1)),
-          ),
+          const SizedBox(height: 12),
+          const Center(child: AppBrandMark(size: 76)),
           const SizedBox(height: 16),
           Text(
             user.displayName,
@@ -464,13 +641,27 @@ class ProfileScreen extends ConsumerWidget {
           const SizedBox(height: 24),
           const Card(
             child: ListTile(
-              leading: Icon(Icons.security_outlined),
-              title: Text('Demo identity'),
-              subtitle: Text(
-                'Firebase authentication will replace this temporary identity.',
-              ),
+              leading: Icon(Icons.verified_user_outlined),
+              title: Text('Account'),
+              subtitle: Text('Signed in with your MUKLadder account.'),
             ),
           ),
+          if (user.role == AppRole.admin) ...[
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: () => context.go('/admin'),
+              icon: const Icon(Icons.admin_panel_settings_outlined),
+              label: const Text('Open admin workspace'),
+            ),
+          ],
+          if (user.role == AppRole.treasurer) ...[
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: () => context.go('/treasurer'),
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              label: const Text('Open treasurer workspace'),
+            ),
+          ],
           const SizedBox(height: 16),
           FilledButton.tonal(
             onPressed: () => ref.read(authServiceProvider).signOut(),
@@ -568,10 +759,28 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('MUKLadder sign in')),
+      appBar: AppBar(title: const AppBrandLockup(compact: true)),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
+          const SizedBox(height: 24),
+          const Center(child: AppBrandMark(size: 84)),
+          const SizedBox(height: 20),
+          Text(
+            'Your ladder. Your game.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall
+                ?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Sign in to follow rankings and manage your challenges.',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 28),
           if (_registering)
             TextField(
               controller: _displayNameController,
@@ -632,7 +841,7 @@ class NotificationsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notifications = ref.watch(notificationsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Alerts')),
+      appBar: AppBar(title: const AppBrandLockup(compact: true)),
       body: notifications.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) =>
@@ -733,52 +942,94 @@ class AdminScreen extends ConsumerWidget {
       return const _RoleDeniedScreen(requiredRole: AppRole.admin);
     }
 
-    final challenges = ref.watch(challengesProvider);
-    final results = ref.watch(resultsProvider);
-    final audits = ref.watch(auditEventsProvider);
+    final overview = ref.watch(adminOverviewProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin workspace')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text(
-            'Read-only operational overview',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Administrative mutations require Firebase authorization and '
-            'trusted backend transactions.',
-          ),
-          const SizedBox(height: 16),
-          _AdminSummaryCard(
-            title: 'Pending challenges',
-            icon: Icons.pending_actions,
-            value: challenges.maybeWhen(
-              data: (items) =>
-                  '${items.where((item) => item.status.name == 'pending').length}',
-              orElse: () => 'Loading',
-            ),
-          ),
-          _AdminSummaryCard(
-            title: 'Unresolved results',
-            icon: Icons.rule,
-            value: results.maybeWhen(
-              data: (items) =>
-                  '${items.where((item) => item.status == ResultStatus.submitted || item.status == ResultStatus.disputed).length}',
-              orElse: () => 'Loading',
-            ),
-          ),
-          _AdminSummaryCard(
-            title: 'Audit events',
-            icon: Icons.history,
-            value: audits.maybeWhen(
-              data: (items) => '${items.length}',
-              orElse: () => 'Loading',
-            ),
+      appBar: AppBar(
+        title: const AppBrandLockup(compact: true),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh admin overview',
+            onPressed: () => ref.invalidate(adminOverviewProvider),
+            icon: const Icon(Icons.refresh),
           ),
         ],
+      ),
+      body: overview.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stackTrace) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off_outlined, size: 40),
+                const SizedBox(height: 12),
+                const Text('Unable to load the admin overview.'),
+                const SizedBox(height: 12),
+                FilledButton.tonal(
+                  onPressed: () => ref.invalidate(adminOverviewProvider),
+                  child: const Text('Try again'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        data: (data) => ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Text(
+              'Tournament operations',
+              style: Theme.of(context).textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'A live overview of players, challenges, results, and activity.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 20),
+            _AdminSummaryCard(
+              title: 'Active players',
+              subtitle: '${data.totalPlayers} registered players',
+              icon: Icons.groups_2_outlined,
+              value: '${data.activePlayers}',
+            ),
+            _AdminSummaryCard(
+              title: 'Pending challenges',
+              subtitle: 'Awaiting a player response',
+              icon: Icons.sports_tennis_outlined,
+              value: '${data.pendingChallenges}',
+            ),
+            _AdminSummaryCard(
+              title: 'Results to review',
+              subtitle: 'Submitted or disputed results',
+              icon: Icons.fact_check_outlined,
+              value: '${data.unresolvedResults}',
+            ),
+            _AdminSummaryCard(
+              title: 'Audit events',
+              subtitle: 'Recorded tournament activity',
+              icon: Icons.history,
+              value: '${data.auditEvents}',
+            ),
+            const SizedBox(height: 12),
+            Card(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              child: const ListTile(
+                leading: Icon(Icons.lock_outline),
+                title: Text('Administrative actions are read-only'),
+                subtitle: Text(
+                  'Approvals, result decisions, and ranking changes need a '
+                  'trusted, audited backend workflow before they can be '
+                  'enabled here.',
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -799,7 +1050,7 @@ class TreasurerScreen extends ConsumerWidget {
 
     final ranking = ref.watch(rankingProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Treasurer workspace')),
+      appBar: AppBar(title: const AppBrandLockup(compact: true)),
       body: ranking.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) =>
@@ -835,21 +1086,36 @@ class TreasurerScreen extends ConsumerWidget {
 class _AdminSummaryCard extends StatelessWidget {
   const _AdminSummaryCard({
     required this.title,
+    required this.subtitle,
     required this.icon,
     required this.value,
   });
 
   final String title;
+  final String subtitle;
   final IconData icon;
   final String value;
 
   @override
   Widget build(BuildContext context) {
     return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      color: Colors.white,
       child: ListTile(
-        leading: Icon(icon),
-        title: Text(title),
-        trailing: Text(value),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        leading: CircleAvatar(
+          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+          child: Icon(icon),
+        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(subtitle),
+        trailing: Text(
+          value,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            color: Theme.of(context).colorScheme.primary,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
       ),
     );
   }
@@ -863,13 +1129,13 @@ class _RoleDeniedScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Access restricted')),
+      appBar: AppBar(title: const AppBrandLockup(compact: true)),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Text(
             'This area is restricted to ${requiredRole.label} users. '
-            'The current demo identity has no access.',
+            'Your account does not have permission to view this workspace.',
             textAlign: TextAlign.center,
           ),
         ),
@@ -890,7 +1156,7 @@ class ChallengesScreen extends ConsumerWidget {
     final challenges = ref.watch(challengesProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Challenges')),
+      appBar: AppBar(title: const AppBrandLockup(compact: true)),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: challenges.when(
