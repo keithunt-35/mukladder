@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mukladder/features/challenges/domain/challenge.dart';
+import 'package:mukladder/features/challenges/domain/challenge_rules.dart';
 import 'package:mukladder/features/challenges/data/in_memory_challenge_repository.dart';
 import 'package:mukladder/features/ladder/data/in_memory_ranking_repository.dart';
 import 'package:mukladder/features/ladder/domain/provisional_ranking_calculator.dart';
@@ -7,6 +8,7 @@ import 'package:mukladder/features/ladder/domain/ranking_entry.dart';
 import 'package:mukladder/features/players/data/in_memory_player_repository.dart';
 import 'package:mukladder/features/players/domain/player.dart';
 import 'package:mukladder/features/results/domain/match_result.dart';
+import 'package:mukladder/features/results/domain/match_score.dart';
 import 'package:mukladder/features/results/data/in_memory_result_repository.dart';
 
 void main() {
@@ -56,6 +58,62 @@ void main() {
       );
     });
 
+    test('validates challenge placement hours and match-date window', () {
+      expect(
+        () => ChallengeRules.validateNormalPlacement(
+          challengerPosition: 5,
+          challengedPosition: 1,
+          requestedAt: DateTime(2026, 11, 5, 6),
+          proposedDate: DateTime(2026, 11, 8),
+        ),
+        returnsNormally,
+      );
+      expect(
+        () => ChallengeRules.validateNormalPlacement(
+          challengerPosition: 5,
+          challengedPosition: 1,
+          requestedAt: DateTime(2026, 11, 5, 20),
+          proposedDate: DateTime(2026, 11, 6),
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => ChallengeRules.validateNormalPlacement(
+          challengerPosition: 1,
+          challengedPosition: 5,
+          requestedAt: DateTime(2026, 11, 5, 12),
+          proposedDate: DateTime(2026, 11, 6),
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => ChallengeRules.validateNormalPlacement(
+          challengerPosition: 7,
+          challengedPosition: 1,
+          requestedAt: DateTime(2026, 11, 5, 12),
+          proposedDate: DateTime(2026, 11, 6),
+        ),
+        throwsArgumentError,
+      );
+      expect(
+        () => ChallengeRules.validateNormalPlacement(
+          challengerPosition: 5,
+          challengedPosition: 1,
+          requestedAt: DateTime(2026, 11, 5, 12),
+          proposedDate: DateTime(2026, 11, 9),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('parses match scores and determines the match winner', () {
+      expect(MatchScore.isValid('6-4, 6-3'), isTrue);
+      expect(MatchScore.challengerWon('6-4, 6-3'), isTrue);
+      expect(MatchScore.challengerWon('4-6, 3-6'), isFalse);
+      expect(MatchScore.isValid('6-6'), isFalse);
+      expect(() => MatchScore.challengerWon('6-4, 3-6'), throwsFormatException);
+    });
+
     test('allows result confirmation and rejects duplicate transitions', () {
       final result = MatchResult(
         id: 'result-1',
@@ -91,20 +149,20 @@ void main() {
         id: 'result-1',
         challengeId: challenge.id,
         submittedBy: challenge.challengerId,
-        score: '4-6, 3-6',
+        score: '6-4, 6-3',
         status: ResultStatus.confirmed,
         submittedAt: DateTime(2026, 10, 23),
       );
       final entries = [
-        RankingEntry(position: 1, player: player),
         RankingEntry(
-          position: 2,
+          position: 1,
           player: Player(
             id: 'player-2',
             displayName: 'Opponent',
             lastActivityAt: DateTime(2026, 10, 22),
           ),
         ),
+        RankingEntry(position: 2, player: player),
       ];
 
       final updated = const ProvisionalRankingCalculator().calculate(
@@ -113,7 +171,7 @@ void main() {
         results: [result],
       );
 
-      expect(updated.map((entry) => entry.player.id), ['player-2', 'player-1']);
+      expect(updated.map((entry) => entry.player.id), ['player-1', 'player-2']);
       expect(updated.map((entry) => entry.position), [1, 2]);
     });
 
@@ -229,6 +287,34 @@ void main() {
       expect(response.status, ChallengeStatus.accepted);
     });
 
+    test('lets the challenger accept a proposed alternative date', () async {
+      final repository = InMemoryChallengeRepository();
+      final challenge = await repository.createNormalChallenge(
+        challengerId: 'player-1',
+        challengedId: 'player-2',
+        createdAt: DateTime(2026, 11, 5, 10),
+        proposedDate: DateTime(2026, 11, 6),
+      );
+
+      final proposal = await repository.respondToChallenge(
+        challengeId: challenge.id,
+        respondentId: 'player-2',
+        response: ChallengeStatus.alternativeDateProposed,
+        respondedAt: DateTime(2026, 11, 5, 14),
+        alternativeDate: DateTime(2026, 11, 7),
+      );
+      expect(proposal.status, ChallengeStatus.alternativeDateProposed);
+
+      final accepted = await repository.respondToChallenge(
+        challengeId: challenge.id,
+        respondentId: 'player-1',
+        response: ChallengeStatus.accepted,
+        respondedAt: DateTime(2026, 11, 5, 15),
+      );
+      expect(accepted.status, ChallengeStatus.accepted);
+      expect(accepted.proposedDate, DateTime(2026, 11, 7));
+    });
+
     test('rejects repeated challenge responses', () async {
       final repository = InMemoryChallengeRepository(
         challenges: [
@@ -277,13 +363,13 @@ void main() {
 
       final result = await repository.submitResult(
         challengeId: 'challenge-1',
-        submittedBy: 'player-1',
+        submittedBy: 'player-2',
         score: '6-4, 6-3',
         submittedAt: DateTime(2026, 10, 23),
       );
       final confirmed = await repository.transitionResult(
         resultId: result.id,
-        actorId: 'player-2',
+        actorId: 'player-1',
         status: ResultStatus.confirmed,
       );
 
@@ -318,7 +404,7 @@ void main() {
       );
       await repository.submitResult(
         challengeId: 'challenge-1',
-        submittedBy: 'player-1',
+        submittedBy: 'player-2',
         score: '6-4',
         submittedAt: DateTime(2026, 10, 23),
       );

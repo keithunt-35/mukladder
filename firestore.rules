@@ -22,11 +22,36 @@ service cloud.firestore {
           .data.role == 'treasurer';
     }
 
+    function challengeExists(challengeId) {
+      return exists(
+        /databases/$(database)/documents/challenges/$(challengeId)
+      );
+    }
+
+    function isChallengeParticipant(challengeId) {
+      return signedIn()
+        && challengeExists(challengeId)
+        && (get(
+          /databases/$(database)/documents/challenges/$(challengeId)
+        ).data.challengerId == request.auth.uid
+          || get(
+            /databases/$(database)/documents/challenges/$(challengeId)
+          ).data.challengedId == request.auth.uid);
+    }
+
     match /users/{uid} {
       allow create: if isSelf(uid)
+        && request.resource.data.uid == uid
         && request.resource.data.role == 'player';
       allow read: if isSelf(uid) || isAdmin();
       allow update: if isSelf(uid)
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly([
+            'displayName',
+            'photoUrl',
+            'photoStoragePath',
+            'updatedAt'
+          ])
         && request.resource.data.role == resource.data.role
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.email == resource.data.email;
@@ -35,8 +60,14 @@ service cloud.firestore {
 
     match /players/{playerId} {
       allow read: if signedIn();
-      allow create: if isAdmin() || isSelf(request.resource.data.userId);
-      allow update: if isAdmin() || isSelf(resource.data.userId);
+      allow create: if isAdmin()
+        || (isSelf(request.resource.data.userId)
+          && request.resource.data.active == false
+          && request.resource.data.registrationStatus == 'pending');
+      allow update: if isAdmin()
+        || (isSelf(resource.data.userId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['photoUrl', 'photoStoragePath', 'updatedAt']));
       allow delete: if isAdmin();
     }
 
@@ -44,37 +75,88 @@ service cloud.firestore {
       allow read: if signedIn()
         && (resource.data.challengerId == request.auth.uid
           || resource.data.challengedId == request.auth.uid
-          || isAdmin());
+          || isAdmin()
+          || isTreasurer());
       allow create: if signedIn()
-        && request.resource.data.challengerId == request.auth.uid;
-      allow update: if signedIn()
-        && (resource.data.challengedId == request.auth.uid || isAdmin())
+        && request.resource.data.challengerId == request.auth.uid
+        && request.resource.data.challengedId != request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.status == 'pending'
+        && request.resource.data.type in ['normal', 'god'];
+      allow update: if isAdmin()
+        || (signedIn()
         && request.resource.data.challengerId == resource.data.challengerId
         && request.resource.data.challengedId == resource.data.challengedId
         && request.resource.data.type == resource.data.type
-        && request.resource.data.createdAt == resource.data.createdAt;
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (
+          (resource.data.status == 'pending'
+            && resource.data.challengedId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'respondedAt', 'alternativeDate'])
+            && request.resource.data.respondedAt == request.time
+            && request.resource.data.status
+              in ['accepted', 'rejected', 'alternativeDateProposed'])
+          || (resource.data.status == 'alternativeDateProposed'
+            && resource.data.challengerId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'respondedAt', 'proposedDate'])
+            && request.resource.data.respondedAt == request.time
+            && request.resource.data.status in ['accepted', 'rejected']
+            && (request.resource.data.status == 'rejected'
+              || request.resource.data.proposedDate
+                == resource.data.alternativeDate))
+          || (resource.data.status == 'accepted'
+            && request.resource.data.status == resource.data.status
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['resultId', 'resultSubmittedAt'])
+            && request.resource.data.resultSubmittedAt == request.time
+            && existsAfter(
+              /databases/$(database)/documents/results/$(request.resource.data.resultId)
+            )
+            && getAfter(
+              /databases/$(database)/documents/results/$(request.resource.data.resultId)
+            ).data.challengeId == challengeId)
+          || (resource.data.status == 'accepted'
+            && request.resource.data.status == 'completed'
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['status', 'completedAt'])
+            && resource.data.resultId is string
+            && getAfter(
+              /databases/$(database)/documents/results/$(resource.data.resultId)
+            ).data.status == 'confirmed')
+        ));
       allow delete: if isAdmin();
     }
 
     match /results/{resultId} {
-      allow read: if signedIn()
-        && (resource.data.submittedBy == request.auth.uid
-          || isAdmin()
-          || (exists(/databases/$(database)/documents/challenges/$(resource.data.challengeId))
-            && (get(/databases/$(database)/documents/challenges/$(resource.data.challengeId))
-              .data.challengerId == request.auth.uid
-              || get(/databases/$(database)/documents/challenges/$(resource.data.challengeId))
-                .data.challengedId == request.auth.uid)));
+      allow read: if isAdmin()
+        || isTreasurer()
+        || isChallengeParticipant(resource.data.challengeId);
       allow create: if signedIn()
         && request.resource.data.submittedBy == request.auth.uid
-        && exists(/databases/$(database)/documents/challenges/$(request.resource.data.challengeId))
+        && challengeExists(request.resource.data.challengeId)
         && get(/databases/$(database)/documents/challenges/$(request.resource.data.challengeId))
           .data.status == 'accepted'
         && (get(/databases/$(database)/documents/challenges/$(request.resource.data.challengeId))
           .data.challengerId == request.auth.uid
           || get(/databases/$(database)/documents/challenges/$(request.resource.data.challengeId))
-            .data.challengedId == request.auth.uid);
-      allow update: if isAdmin();
+            .data.challengedId == request.auth.uid)
+        && request.resource.data.status == 'submitted'
+        && request.resource.data.score is string
+        && request.resource.data.submittedAt == request.time
+        && request.resource.data.score.matches('^[0-9]+-[0-9]+(, ?[0-9]+-[0-9]+)*$')
+        && getAfter(
+          /databases/$(database)/documents/challenges/$(request.resource.data.challengeId)
+        ).data.resultId == resultId;
+      allow update: if isAdmin()
+        || (isChallengeParticipant(resource.data.challengeId)
+          && request.auth.uid != resource.data.submittedBy
+          && resource.data.status == 'submitted'
+          && request.resource.data.status in ['confirmed', 'disputed']
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'updatedAt', 'reviewedBy', 'reviewedAt'])
+          && request.resource.data.reviewedBy == request.auth.uid);
       allow delete: if false;
     }
 

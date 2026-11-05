@@ -4,6 +4,7 @@ import '../../audit/data/audit_repository.dart';
 import '../../audit/data/in_memory_audit_repository.dart';
 import '../../challenges/domain/challenge_rules.dart';
 import '../domain/match_result.dart';
+import '../domain/match_score.dart';
 import 'result_repository.dart';
 
 class InMemoryResultRepository implements ResultRepository {
@@ -44,7 +45,7 @@ class InMemoryResultRepository implements ResultRepository {
         submittedAt: submittedAt,
       );
     }
-    if (!isValidScore(score)) {
+    if (!MatchScore.isValid(score)) {
       throw FormatException(
         'Use scores such as 6-4, 6-3 with one or more sets.',
       );
@@ -95,6 +96,9 @@ class InMemoryResultRepository implements ResultRepository {
         actorId != challenge.challengedId) {
       throw StateError('Only challenge participants can review a result.');
     }
+    if (actorId == result.submittedBy) {
+      throw StateError('The result submitter cannot confirm their own score.');
+    }
 
     final updatedResult = result.transitionTo(status);
     _results[index] = updatedResult;
@@ -116,13 +120,5 @@ class InMemoryResultRepository implements ResultRepository {
     return updatedResult;
   }
 
-  static bool isValidScore(String score) {
-    final parts = score.trim().split(',').map((set) => set.trim()).toList();
-    if (parts.isEmpty || parts.any((set) => !_setPattern.hasMatch(set))) {
-      return false;
-    }
-    return true;
-  }
-
-  static final _setPattern = RegExp(r'^\d+-\d+$');
+  static bool isValidScore(String score) => MatchScore.isValid(score);
 }

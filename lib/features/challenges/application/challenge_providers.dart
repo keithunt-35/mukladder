@@ -36,6 +36,7 @@ final challengeResponseProvider =
             respondentId: request.respondentId,
             response: request.response,
             respondedAt: request.respondedAt,
+            alternativeDate: request.alternativeDate,
           );
     });
 
@@ -77,12 +78,14 @@ class ChallengeResponseRequest {
     required this.respondentId,
     required this.response,
     this.respondedAt,
+    this.alternativeDate,
   });
 
   final String challengeId;
   final String respondentId;
   final ChallengeStatus response;
   final DateTime? respondedAt;
+  final DateTime? alternativeDate;
 }
 
 class GodChallengeRequest {

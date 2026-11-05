@@ -3,6 +3,7 @@ class Player {
     required this.id,
     required this.displayName,
     required this.lastActivityAt,
+    this.photoUrl,
     this.paymentStatus = PaymentStatus.unknown,
     this.active = true,
   }) : assert(id != ''),
@@ -11,6 +12,7 @@ class Player {
   final String id;
   final String displayName;
   final DateTime lastActivityAt;
+  final String? photoUrl;
   final PaymentStatus paymentStatus;
   final bool active;
 }

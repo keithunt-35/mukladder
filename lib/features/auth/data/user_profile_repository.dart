@@ -11,16 +11,37 @@ class UserProfileRepository {
   Future<void> createPlayerProfile({
     required AppUser user,
     required String email,
-  }) {
-    return _firestore.collection('users').doc(user.id).set({
-      'uid': user.id,
-      'displayName': user.displayName,
-      'email': email,
-      'role': 'player',
-      'status': 'active',
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+  }) async {
+    final userReference = _firestore.collection('users').doc(user.id);
+    final playerReference = _firestore.collection('players').doc(user.id);
+    final batch = _firestore.batch()
+      ..set(userReference, {
+        'uid': user.id,
+        'displayName': user.displayName,
+        'email': email,
+        'role': 'player',
+        'status': 'active',
+        'photoUrl': user.photoUrl,
+        'photoStoragePath': user.photoUrl == null
+            ? null
+            : 'profilePhotos/${user.id}/profile.jpg',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      })
+      ..set(playerReference, {
+        'userId': user.id,
+        'displayName': user.displayName,
+        'photoUrl': user.photoUrl,
+        'photoStoragePath': user.photoUrl == null
+            ? null
+            : 'profilePhotos/${user.id}/profile.jpg',
+        'registrationStatus': 'pending',
+        'paymentStatus': 'unknown',
+        'active': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    await batch.commit();
   }
 
   Future<AppUser> getCurrentUser(String uid) async {
@@ -32,6 +53,7 @@ class UserProfileRepository {
     return AppUser(
       id: uid,
       displayName: data['displayName'] as String,
+      photoUrl: data['photoUrl'] as String?,
       role: switch (data['role']) {
         'admin' => AppRole.admin,
         'treasurer' => AppRole.treasurer,
