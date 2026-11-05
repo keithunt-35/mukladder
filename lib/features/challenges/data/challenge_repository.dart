@@ -27,6 +27,7 @@ abstract interface class ChallengeRepository {
     required String respondentId,
     required ChallengeStatus response,
     DateTime? respondedAt,
+    DateTime? alternativeDate,
   });
 
   Future<Challenge> completeChallenge({

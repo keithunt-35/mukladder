@@ -9,8 +9,8 @@ game results.
 
 ## Implemented pure Dart models
 
-- `Player`: identity, display name, activity timestamp, payment-status flag and
-  active state.
+- `Player`: identity, display name, optional profile photo URL, activity
+  timestamp, payment-status flag and active state.
 - `RankingEntry`: a player and a positive ladder position.
 - `Challenge`: participants, type, status and creation/proposed-date metadata.
   It rejects invalid state transitions.
@@ -35,13 +35,27 @@ official scoring and deadline policy must be verified before production use.
 
 ### `users/{uid}`
 
-`uid`, `displayName`, `email`, `role`, `status`, `createdAt`, `updatedAt`.
+`uid`, `displayName`, `email`, `photoUrl`, `photoStoragePath`, `role`,
+`status`, `createdAt`, `updatedAt`.
 The role is written only by an authorized backend/admin workflow.
 
 ### `players/{playerId}`
 
 `userId`, `displayName`, `position`, `lastActivityAt`, `registrationStatus`,
-`paymentStatus`, `active`, `createdAt`, `updatedAt`.
+`paymentStatus`, `photoUrl`, `active`, `createdAt`, `updatedAt`.
+The app also stores `photoStoragePath` on linked profile documents.
+
+Profile photos are stored in Firebase Storage at
+`profilePhotos/{uid}/profile.jpg`. The matching download URL is copied to the
+user profile and linked player document. New registrations begin with a
+pending, inactive player document; an authorized workflow must approve and
+associate existing tournament roster entries with the player's Auth UID.
+
+The Profile match history joins the signed-in player's challenge records with
+their `results` documents and the opponent's public player profile. The score
+shown is the submitted score string, with its result status and date. It is not
+a ladder-points calculation; authoritative points and ranking changes require
+confirmed scoring rules and a trusted backend.
 
 ### `challenges/{challengeId}`
 

@@ -302,3 +302,66 @@ the algorithm clearly separate until the official rulebook is verified.
   provisional client-side rule logic.
 - `flutter analyze --no-pub`: passed.
 - `flutter test --no-pub`: passed, 25 tests.
+
+## Player profile photos — 2026-11-04
+
+- Added optional gallery photo selection during account registration and a
+  profile photo replace action for existing signed-in players.
+- Added Firebase Storage upload at a per-user path with JPEG and 5 MB limits.
+- Added photo URL fields to user/player models and Firestore profile writes.
+- Added a reusable avatar with initials fallback to the ladder rows and player
+  profile. Ladder reads now listen to player profile updates as well as ranking
+  updates.
+- Added Storage Security Rules restricting uploads/replacements to the owning
+  authenticated account and reads to signed-in users; configured Firebase CLI
+  to use the rules file.
+- Added iOS photo library usage description.
+- The project owner still needs to confirm/enable the Firebase Storage bucket
+  and deploy the reviewed rules. Existing seeded players need a verified
+  `players/{playerId}.userId` link to their Auth UID for their pictures to show
+  on the roster.
+
+## Profile upload diagnostics and match history — 2026-11-05
+
+- The upload now uses the completed Storage task's reference to fetch the
+  download URL and records both that URL and `photoStoragePath` in Firestore.
+- Added actionable upload errors for missing Storage objects/buckets and
+  Storage authorization failures.
+- Added a profile match-history view showing opponent, reported match score,
+  challenge type, result confirmation state and date.
+- Match history reads only challenges involving the signed-in player and their
+  related results, and resolves opponent display names from player documents.
+- `flutter analyze --no-pub`: passed.
+- `flutter test --no-pub`: passed, 27 tests.
+- `flutter build apk --debug --no-pub`: passed; installed and launched on the
+  connected Android device.
+- The Firebase CLI is unavailable in this environment, so Storage bucket
+  existence and deployed rules could not be checked. The project owner must
+  verify the configured bucket and deploy `storage.rules`.
+- No official ladder-point total is generated: ranking points are not in the
+  current result data model, and the trusted/confirmed ranking rules are not
+  available.
+
+## Challenge and result workflow continuation — 2026-11-05
+
+- Added match-date selection for Normal and G.O.D. challenge creation and
+  added alternative-date proposal/acceptance handling in the challenge UI and
+  repositories.
+- Added provisional score parsing, participant score reporting, opponent confirmation
+  or dispute, and atomic Firestore writes for the result/challenge documents.
+- Corrected Normal challenge range validation so a player can target only
+  someone ranked above them, at most four positions higher.
+- Added tests covering rank direction/range, alternate-date acceptance, and
+  the two-player result submit/review flow.
+- `dart format lib test`: passed.
+- `flutter analyze --no-pub`: passed.
+- `flutter test --no-pub`: passed, 30 tests.
+- `flutter build apk --debug --no-pub`: passed; produced
+  `build/app/outputs/flutter-apk/app-debug.apk`.
+- These are client-side/provisional workflows, not an authoritative production
+  implementation. Firestore Rules do not enforce every time, rank, score or
+  cooldown condition, and challenge participant IDs are not yet reconciled
+  with seeded roster documents and Auth UIDs.
+- Trusted Cloud Functions, ranking history/updates, automated walkovers and
+  penalties, synced notifications, Admin/Treasurer mutations, Emulator Suite
+  tests, and live Firebase verification remain outstanding.

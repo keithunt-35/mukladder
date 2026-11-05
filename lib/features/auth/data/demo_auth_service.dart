@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import '../domain/app_user.dart';
 import '../domain/auth_service.dart';
 
@@ -26,11 +28,17 @@ class DemoAuthService implements AuthService {
     required String email,
     required String password,
     required String displayName,
+    Uint8List? profilePhoto,
   }) async => AppUser(
     id: 'demo-player-1',
     displayName: displayName,
     role: AppRole.player,
   );
+
+  @override
+  Future<AppUser> updateProfilePhoto({required Uint8List profilePhoto}) async {
+    throw UnsupportedError('Profile photo uploads require Firebase.');
+  }
 
   @override
   Future<void> signOut() async {}

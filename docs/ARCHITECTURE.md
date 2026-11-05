@@ -37,8 +37,12 @@ official.
 ## Backend responsibilities
 
 - Firebase Auth authenticates users.
-- Firestore stores player, challenge, result, ranking, notification and audit
-  data.
+- Firestore stores player profiles (including photo download URLs), challenge,
+  result, ranking, notification and audit data.
+- Firebase Storage holds JPEG profile photos at
+  `profilePhotos/{uid}/profile.jpg`. Storage rules restrict uploads and
+  replacements to that authenticated owner and allow signed-in players to view
+  ladder photos.
 - Cloud Functions are the planned authority for privileged ranking changes,
   deadline handling, cooldowns, inactivity penalties and notifications; these
   workflows remain outstanding.
@@ -52,6 +56,23 @@ Authentication uses Firebase Auth. App roles are loaded from the user's
 Firestore profile and the UI checks roles separately for Admin and Treasurer
 screens. Backend rules remain the security boundary; a client-side role check
 is not sufficient authorization.
+
+Sign-up optionally selects a photo from the device gallery, resizes it to a
+maximum 512-by-512 image and uploads it to the authenticated user's Storage
+path. The resulting download URL and Storage path are recorded in the Firestore
+user profile and player document; image bytes belong in Storage, not a
+Firestore document.
+Existing players can change their photo from Profile. The ladder merges ordered
+ranking documents with player documents and refreshes when either collection
+changes. Existing seeded players must have a matching player document linked to
+their Auth UID (`userId`) before their uploaded photo is associated with that
+ranking entry.
+
+The Profile match history reads the signed-in user's challenges, fetches the
+associated result records and resolves opponent names from player documents.
+It displays the reported match score and confirmation state. No authoritative
+ladder-point total is calculated because the trusted ranking workflow and
+confirmed 2026 scoring rules are not implemented.
 
 ## Offline strategy
 

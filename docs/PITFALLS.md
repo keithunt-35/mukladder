@@ -41,6 +41,11 @@ reviewed before production release. Items are not silently treated as solved.
 13. **Admin workspace is read-only:** The dashboard shows Firestore-backed
    counts. No trusted, audited backend actions exist yet for approvals,
    result decisions, ranking changes, role updates or payment changes.
+14. **Profile photo Storage setup:** Client support and `storage.rules` are
+   implemented, but the project owner must confirm the Firebase Storage
+   bucket/plan and deploy the rules. Existing seeded roster players are not
+   linked to Auth UIDs; add verified `userId` links before expecting their
+   uploaded photos to appear beside their ladder entries.
 
 ## Resolved or documented
 

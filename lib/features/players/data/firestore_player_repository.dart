@@ -20,6 +20,7 @@ class FirestorePlayerRepository implements PlayerRepository {
     return Player(
       id: document.id,
       displayName: data['displayName'] as String,
+      photoUrl: data['photoUrl'] as String?,
       lastActivityAt:
           _dateFrom(data['lastActivityAt']) ??
           DateTime.fromMillisecondsSinceEpoch(0),

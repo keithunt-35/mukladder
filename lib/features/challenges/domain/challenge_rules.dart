@@ -7,13 +7,13 @@ class ChallengeRules {
     required DateTime requestedAt,
     DateTime? proposedDate,
   }) {
-    if (challengerPosition >= challengedPosition) {
+    if (challengedPosition >= challengerPosition) {
       throw ArgumentError(
         'A challenge must target a player ranked above the challenger.',
       );
     }
 
-    if (challengedPosition - challengerPosition > 4) {
+    if (challengerPosition - challengedPosition > 4) {
       throw ArgumentError(
         'A Normal challenge may target at most four positions above.',
       );
@@ -87,6 +87,34 @@ class ChallengeRules {
     );
     if (responseDay != requestedDay) {
       throw StateError('A challenge must be answered on the placement day.');
+    }
+  }
+
+  static void validateAlternativeDate({
+    required DateTime requestedAt,
+    required DateTime proposedDate,
+    required DateTime alternativeDate,
+  }) {
+    final requestDay = DateTime(
+      requestedAt.year,
+      requestedAt.month,
+      requestedAt.day,
+    );
+    final alternativeDay = DateTime(
+      alternativeDate.year,
+      alternativeDate.month,
+      alternativeDate.day,
+    );
+    final currentDay = DateTime(
+      proposedDate.year,
+      proposedDate.month,
+      proposedDate.day,
+    );
+    final daysAhead = alternativeDay.difference(requestDay).inDays;
+    if (daysAhead < 1 || daysAhead > 3 || alternativeDay == currentDay) {
+      throw ArgumentError(
+        'Choose a different match date within three days of the challenge.',
+      );
     }
   }
 

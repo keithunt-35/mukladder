@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'app_user.dart';
 
 abstract interface class AuthService {
@@ -9,7 +11,10 @@ abstract interface class AuthService {
     required String email,
     required String password,
     required String displayName,
+    Uint8List? profilePhoto,
   });
+
+  Future<AppUser> updateProfilePhoto({required Uint8List profilePhoto});
 
   Future<void> signOut();
 }

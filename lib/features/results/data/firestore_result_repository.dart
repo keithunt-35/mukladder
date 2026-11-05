@@ -1,8 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../challenges/data/challenge_repository.dart';
 import '../../challenges/domain/challenge.dart';
+import '../../challenges/domain/challenge_rules.dart';
 import '../domain/match_result.dart';
+import '../domain/match_score.dart';
 import 'result_repository.dart';
 
 class FirestoreResultRepository implements ResultRepository {
@@ -16,8 +19,22 @@ class FirestoreResultRepository implements ResultRepository {
 
   @override
   Future<List<MatchResult>> getResults() async {
-    final snapshot = await _firestore.collection('results').get();
-    return snapshot.docs.map(_fromDocument).toList(growable: false);
+    final challenges = await challengeRepository.getChallenges();
+    final snapshots = await Future.wait(
+      challenges.map(
+        (challenge) => _firestore
+            .collection('results')
+            .where('challengeId', isEqualTo: challenge.id)
+            .get(),
+      ),
+    );
+    final documents = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    for (final snapshot in snapshots) {
+      for (final document in snapshot.docs) {
+        documents[document.id] = document;
+      }
+    }
+    return documents.values.map(_fromDocument).toList(growable: false);
   }
 
   @override
@@ -27,6 +44,10 @@ class FirestoreResultRepository implements ResultRepository {
     required String score,
     required DateTime submittedAt,
   }) async {
+    final signedInUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (signedInUserId == null || signedInUserId != submittedBy) {
+      throw StateError('The signed-in user must submit this result.');
+    }
     final challenge = await challengeRepository.getChallenge(challengeId);
     if (challenge.status != ChallengeStatus.accepted) {
       throw StateError(
@@ -37,23 +58,46 @@ class FirestoreResultRepository implements ResultRepository {
         challenge.challengedId != submittedBy) {
       throw StateError('Only a challenge participant can submit a result.');
     }
-    final existing = await _firestore
-        .collection('results')
-        .where('challengeId', isEqualTo: challengeId)
-        .limit(1)
-        .get();
-    if (existing.docs.isNotEmpty) {
-      throw StateError(
-        'A result has already been submitted for this challenge.',
+    if (!MatchScore.isValid(score)) {
+      throw const FormatException(
+        'Use scores such as 6-4, 6-3 with one or more sets.',
       );
     }
+    if (challenge.proposedDate != null) {
+      ChallengeRules.validateResultSubmission(
+        matchDate: challenge.proposedDate!,
+        submittedAt: submittedAt,
+      );
+    }
+    final challengeReference = _firestore
+        .collection('challenges')
+        .doc(challengeId);
     final reference = _firestore.collection('results').doc();
-    await reference.set({
-      'challengeId': challengeId,
-      'submittedBy': submittedBy,
-      'score': score,
-      'status': ResultStatus.submitted.name,
-      'submittedAt': Timestamp.fromDate(submittedAt),
+    await _firestore.runTransaction((transaction) async {
+      final currentChallenge = await transaction.get(challengeReference);
+      final data = currentChallenge.data();
+      if (data == null || data['status'] != ChallengeStatus.accepted.name) {
+        throw StateError(
+          'Results can only be submitted for accepted challenges.',
+        );
+      }
+      if (data['resultId'] != null) {
+        throw StateError(
+          'A result has already been submitted for this challenge.',
+        );
+      }
+      transaction
+        ..set(reference, {
+          'challengeId': challengeId,
+          'submittedBy': submittedBy,
+          'score': score.trim(),
+          'status': ResultStatus.submitted.name,
+          'submittedAt': FieldValue.serverTimestamp(),
+        })
+        ..update(challengeReference, {
+          'resultId': reference.id,
+          'resultSubmittedAt': FieldValue.serverTimestamp(),
+        });
     });
     final result = await _get(reference.id);
     return result;
@@ -65,13 +109,52 @@ class FirestoreResultRepository implements ResultRepository {
     required String actorId,
     required ResultStatus status,
   }) async {
-    final current = await _get(resultId);
-    final updated = current.transitionTo(status);
-    await _firestore.collection('results').doc(resultId).update({
-      'status': status.name,
-      'updatedAt': FieldValue.serverTimestamp(),
+    final signedInUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (signedInUserId == null || signedInUserId != actorId) {
+      throw StateError('The signed-in user must review this result.');
+    }
+    final resultReference = _firestore.collection('results').doc(resultId);
+    MatchResult? updated;
+    await _firestore.runTransaction((transaction) async {
+      final resultSnapshot = await transaction.get(resultReference);
+      final resultData = resultSnapshot.data();
+      if (resultData == null) {
+        throw StateError('Result was not found.');
+      }
+      final current = _fromData(resultId, resultData);
+      final challengeReference = _firestore
+          .collection('challenges')
+          .doc(current.challengeId);
+      final challengeSnapshot = await transaction.get(challengeReference);
+      final challengeData = challengeSnapshot.data();
+      if (challengeData == null) {
+        throw StateError('Challenge was not found.');
+      }
+      if (actorId != challengeData['challengerId'] &&
+          actorId != challengeData['challengedId']) {
+        throw StateError('Only challenge participants can review a result.');
+      }
+      if (actorId == current.submittedBy) {
+        throw StateError(
+          'The result submitter cannot confirm their own score.',
+        );
+      }
+      final next = current.transitionTo(status);
+      transaction.update(resultReference, {
+        'status': status.name,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'reviewedBy': actorId,
+        'reviewedAt': FieldValue.serverTimestamp(),
+      });
+      if (status == ResultStatus.confirmed) {
+        transaction.update(challengeReference, {
+          'status': ChallengeStatus.completed.name,
+          'completedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      updated = next;
     });
-    return updated;
+    return updated!;
   }
 
   Future<MatchResult> _get(String id) async {

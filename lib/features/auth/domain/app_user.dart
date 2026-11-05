@@ -13,9 +13,11 @@ class AppUser {
     required this.id,
     required this.displayName,
     required this.role,
+    this.photoUrl,
   });
 
   final String id;
   final String displayName;
   final AppRole role;
+  final String? photoUrl;
 }

@@ -105,6 +105,8 @@ project.
 - Provides registration, login, logout and session restoration.
 - Uses Firestore repositories for ranking, challenges, results, audit reads and
   notification history.
+- Uploads optional JPEG profile photos to Firebase Storage during registration
+  and lets players replace them from their Profile.
 - Protects client access with the checked-in Firestore Security Rules.
 - Requests notification permission and registers foreground/background FCM
   handlers.
@@ -112,6 +114,41 @@ project.
 The remaining production requirement is a trusted backend for ranking
 transactions, official result transitions and audit-event writes. The mobile
 client deliberately cannot write rankings or audit events.
+
+### Firebase Storage for profile photos
+
+The app is configured for the `mukladder.firebasestorage.app` bucket. Before
+photo uploads can work in a Firebase project:
+
+1. In Firebase Console, confirm or create the project's Storage bucket and
+   check that its bucket name exactly matches `lib/firebase_options.dart` and
+   `android/app/google-services.json`.
+2. Review `storage.rules`. Authenticated users can view profile photos; each
+   user can upload or replace only their own JPEG (up to 5 MB).
+3. If Firebase asks to enable billing or upgrade the plan, stop and confirm the
+   project's budget before proceeding.
+4. After approval, deploy the reviewed rules with `firebase deploy --only
+   storage`.
+5. Link existing ladder roster player documents to their account by setting
+   the correct `userId`; do not match accounts using display names alone.
+
+If upload reports `object-not-found`, verify the bucket exists and the app is
+configured for that exact bucket. `putData` must complete before the app asks
+Storage for the download URL. If upload reports `unauthorized`, deploy the
+reviewed Storage rules. The photo's bytes are stored in Storage; Firestore
+stores its download URL and Storage path on both the user and player profile.
+
+Firebase download URLs contain access tokens and should be treated as
+shareable links: anyone who obtains a URL may be able to view that image.
+Players should upload only photos they are comfortable displaying to other
+ladder users and with that link-access behavior.
+
+No Storage bucket was created and no rules were deployed as part of this code
+change.
+
+The Profile screen also shows the player's submitted match scores with their
+opponents and result states. The app does not calculate official ladder points
+from those scores.
 
 ### Required configuration artifacts
 

@@ -21,6 +21,8 @@ collection; the starter ranking is seeded data, not an automated rules engine.
 - Result submission + automated ranking engine
 - 2-day cool-down enforcement
 - Admin & Treasurer dashboard
+- Player profile photos
+- Player match history
 - Push notifications
 
 ## Tech Stack
@@ -83,6 +85,10 @@ The current app requires a sign-in to the configured Firebase project.
    currently contains a 24-player Week 7 Day 5 seed.
 3. Open **Profile** to see your account and any role-based workspace links.
 4. Admin accounts can open the read-only operational overview.
+5. On sign-up, players can optionally choose a profile photo; signed-in users
+   can change it from **Profile**.
+6. **Profile** displays submitted match scores with each opponent and result
+   status.
 
 ### Run the checks
 
@@ -98,6 +104,12 @@ The debug APK is written to
 ## Current limitations
 
 - The ranking feed is live, but its initial development data is a static seed.
+- Profile photo uploads require the project owner to enable Firebase Storage
+  and deploy `storage.rules`; existing roster accounts must be linked by
+  verified Auth UID to show their image in the ladder.
+- Match history displays recorded tennis scores. Official ladder points are
+  not calculated until the tournament scoring rules and trusted ranking
+  backend are confirmed.
 - The full official rules document and confirmation of 2026 rule applicability
   are still needed.
 - Trusted backend ranking transitions and administrative mutations are not

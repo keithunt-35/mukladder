@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'app_brand.dart';
 import '../features/admin/application/admin_overview_provider.dart';
@@ -13,8 +15,11 @@ import '../features/ladder/application/ranking_providers.dart';
 import '../features/ladder/domain/ranking_entry.dart';
 import '../features/notifications/application/notification_providers.dart';
 import '../features/notifications/domain/notification.dart';
+import '../features/players/data/firebase_profile_photo_repository.dart';
 import '../features/results/application/result_providers.dart';
 import '../features/results/domain/match_result.dart';
+import '../features/results/domain/player_match_history_entry.dart';
+import '../features/players/presentation/player_avatar.dart';
 
 class MukladderApp extends StatelessWidget {
   const MukladderApp({super.key});
@@ -248,7 +253,21 @@ class _RankingList extends StatelessWidget {
                 horizontal: 16,
                 vertical: 6,
               ),
-              leading: _RankBadge(position: entry.position),
+              leading: SizedBox(
+                width: 84,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _RankBadge(position: entry.position),
+                    const SizedBox(width: 4),
+                    PlayerAvatar(
+                      displayName: entry.player.displayName,
+                      photoUrl: entry.player.photoUrl,
+                      radius: 19,
+                    ),
+                  ],
+                ),
+              ),
               title: Text(
                 entry.player.displayName,
                 style: const TextStyle(fontWeight: FontWeight.w700),
@@ -323,6 +342,10 @@ class _RankingList extends StatelessWidget {
     if (confirmed != true || !context.mounted) {
       return;
     }
+    final proposedDate = await _chooseMatchDate(context);
+    if (proposedDate == null || !context.mounted) {
+      return;
+    }
 
     try {
       final container = ProviderScope.containerOf(context);
@@ -332,7 +355,7 @@ class _RankingList extends StatelessWidget {
             challengerId: currentUserId,
             challengedId: entry.player.id,
             createdAt: DateTime.now(),
-            proposedDate: DateTime.now().add(const Duration(days: 1)),
+            proposedDate: proposedDate,
           ),
         ).future,
       );
@@ -387,15 +410,20 @@ class _RankingList extends StatelessWidget {
     if (confirmed != true || !context.mounted) {
       return;
     }
+    final proposedDate = await _chooseMatchDate(context);
+    if (proposedDate == null || !context.mounted) {
+      return;
+    }
 
     final container = ProviderScope.containerOf(context);
+    final createdAt = DateTime.now();
     final request = ChallengeRequest(
       challengerId: currentUserId,
       challengedId: entry.player.id,
-      createdAt: DateTime.now(),
+      createdAt: createdAt,
       challengerPosition: currentUserPosition,
       challengedPosition: entry.position,
-      proposedDate: DateTime.now().add(const Duration(days: 1)),
+      proposedDate: proposedDate,
       cooldownStartedAt: cooldownStartedAt,
     );
     try {
@@ -427,6 +455,19 @@ class _RankingList extends StatelessWidget {
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
   }
+}
+
+Future<DateTime?> _chooseMatchDate(BuildContext context) {
+  final now = DateTime.now();
+  final tomorrow = DateTime(now.year, now.month, now.day + 1);
+  final lastAllowedDay = DateTime(now.year, now.month, now.day + 3);
+  return showDatePicker(
+    context: context,
+    initialDate: tomorrow,
+    firstDate: tomorrow,
+    lastDate: lastAllowedDay,
+    helpText: 'Choose a match date (within 3 days)',
+  );
 }
 
 int? _positionOf(List<RankingEntry> entries, String playerId) {
@@ -563,7 +604,7 @@ class _RankBadge extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final highlighted = position <= 3;
     return CircleAvatar(
-      radius: 22,
+      radius: 19,
       backgroundColor: highlighted
           ? colors.tertiaryContainer
           : colors.surfaceContainerHighest,
@@ -613,6 +654,25 @@ class _RankingError extends StatelessWidget {
   }
 }
 
+String _profilePhotoError(FirebaseException error) {
+  if (error.plugin == 'firebase_storage') {
+    return switch (error.code) {
+      'object-not-found' =>
+        'The upload finished, but Firebase Storage cannot find the photo. '
+            'Check that the project Storage bucket is enabled and matches '
+            'the app configuration.',
+      'bucket-not-found' =>
+        'The Firebase Storage bucket is not available. Ask the project '
+            'owner to enable the configured bucket.',
+      'unauthorized' || 'unauthenticated' =>
+        'Firebase Storage rejected this upload. Check that you are signed '
+            'in and that the deployed Storage rules allow your own photo.',
+      _ => error.message ?? 'Could not upload the profile photo.',
+    };
+  }
+  return error.message ?? 'Could not save your account or profile photo.';
+}
+
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
@@ -629,7 +689,7 @@ class ProfileScreen extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         children: [
           const SizedBox(height: 12),
-          const Center(child: AppBrandMark(size: 76)),
+          Center(child: _ProfilePhotoEditor(user: user)),
           const SizedBox(height: 16),
           Text(
             user.displayName,
@@ -639,6 +699,8 @@ class ProfileScreen extends ConsumerWidget {
           const SizedBox(height: 4),
           Text(user.role.label, textAlign: TextAlign.center),
           const SizedBox(height: 24),
+          _PlayerMatchHistorySection(userId: user.id),
+          const SizedBox(height: 12),
           const Card(
             child: ListTile(
               leading: Icon(Icons.verified_user_outlined),
@@ -673,6 +735,197 @@ class ProfileScreen extends ConsumerWidget {
   }
 }
 
+class _PlayerMatchHistorySection extends ConsumerWidget {
+  const _PlayerMatchHistorySection({required this.userId});
+
+  final String userId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final history = ref.watch(playerMatchHistoryProvider(userId));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Match history', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 8),
+        history.when(
+          loading: () => const Card(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ),
+          error: (error, _) => Card(
+            child: ListTile(
+              leading: const Icon(Icons.error_outline),
+              title: const Text('Unable to load match history'),
+              subtitle: Text(error.toString()),
+              trailing: IconButton(
+                tooltip: 'Retry match history',
+                onPressed: () =>
+                    ref.invalidate(playerMatchHistoryProvider(userId)),
+                icon: const Icon(Icons.refresh),
+              ),
+            ),
+          ),
+          data: (entries) => entries.isEmpty
+              ? const Card(
+                  child: ListTile(
+                    leading: Icon(Icons.sports_tennis_outlined),
+                    title: Text('No match history yet'),
+                    subtitle: Text(
+                      'Confirmed and submitted match scores will appear here.',
+                    ),
+                  ),
+                )
+              : Column(
+                  children: entries
+                      .map((entry) => _MatchHistoryCard(entry: entry))
+                      .toList(growable: false),
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MatchHistoryCard extends StatelessWidget {
+  const _MatchHistoryCard({required this.entry});
+
+  final PlayerMatchHistoryEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final date = entry.playedAt.toLocal();
+    final dateLabel = '${date.day}/${date.month}/${date.year}';
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.sports_tennis_outlined),
+        title: Text('vs ${entry.opponentName}'),
+        subtitle: Text(
+          'Score: ${entry.score} · ${entry.statusLabel} · $dateLabel',
+        ),
+        isThreeLine: true,
+        trailing: Text(
+          entry.challengeTypeLabel,
+          style: Theme.of(context).textTheme.labelSmall,
+        ),
+      ),
+    );
+  }
+}
+
+class _ProfilePhotoEditor extends ConsumerStatefulWidget {
+  const _ProfilePhotoEditor({required this.user});
+
+  final AppUser user;
+
+  @override
+  ConsumerState<_ProfilePhotoEditor> createState() =>
+      _ProfilePhotoEditorState();
+}
+
+class _ProfilePhotoEditorState extends ConsumerState<_ProfilePhotoEditor> {
+  final _picker = ImagePicker();
+  String? _photoUrl;
+  String? _error;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _photoUrl = widget.user.photoUrl;
+  }
+
+  Future<void> _choosePhoto() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 512,
+        maxHeight: 512,
+      );
+      if (image == null) {
+        return;
+      }
+
+      final bytes = await image.readAsBytes();
+      if (bytes.length > FirebaseProfilePhotoRepository.maximumPhotoSizeBytes) {
+        setState(() => _error = 'Choose a photo no larger than 5 MB.');
+        return;
+      }
+
+      final updatedUser = await ref
+          .read(authServiceProvider)
+          .updateProfilePhoto(profilePhoto: bytes);
+      if (!mounted) {
+        return;
+      }
+      setState(() => _photoUrl = updatedUser.photoUrl);
+      ref.invalidate(authStateProvider);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile photo updated.')));
+    } on PlatformException {
+      if (mounted) {
+        setState(() => _error = 'Could not open the photo gallery.');
+      }
+    } on FirebaseException catch (error) {
+      if (mounted) {
+        setState(() => _error = _profilePhotoError(error));
+      }
+    } on StateError catch (error) {
+      if (mounted) {
+        setState(() => _error = error.message);
+      }
+    } on ArgumentError catch (error) {
+      if (mounted) {
+        setState(() => _error = error.message?.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        PlayerAvatar(
+          displayName: widget.user.displayName,
+          photoUrl: _photoUrl,
+          radius: 42,
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _choosePhoto,
+          icon: _busy
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.photo_camera_outlined),
+          label: Text(_busy ? 'Uploading...' : 'Change profile photo'),
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _error!,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Theme.of(context).colorScheme.error),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _AuthenticationRequiredScreen extends StatelessWidget {
   const _AuthenticationRequiredScreen();
 
@@ -696,6 +949,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   bool _registering = false;
   bool _busy = false;
   String? _error;
+  Uint8List? _selectedProfilePhoto;
+  final _imagePicker = ImagePicker();
 
   @override
   void dispose() {
@@ -703,6 +958,42 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     _passwordController.dispose();
     _displayNameController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickSignupPhoto() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+        maxWidth: 512,
+        maxHeight: 512,
+      );
+      if (image == null) {
+        return;
+      }
+      final bytes = await image.readAsBytes();
+      if (bytes.length > FirebaseProfilePhotoRepository.maximumPhotoSizeBytes) {
+        if (mounted) {
+          setState(() => _error = 'Choose a photo no larger than 5 MB.');
+        }
+        return;
+      }
+      if (mounted) {
+        setState(() => _selectedProfilePhoto = bytes);
+      }
+    } on PlatformException {
+      if (mounted) {
+        setState(() => _error = 'Could not open the photo gallery.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
   }
 
   Future<void> _submit() async {
@@ -731,14 +1022,28 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           email: email,
           password: password,
           displayName: displayName,
+          profilePhoto: _selectedProfilePhoto,
         );
+        ref.invalidate(authStateProvider);
       } else {
         await service.signIn(email: email, password: password);
       }
     } on FirebaseAuthException catch (error) {
-      setState(() => _error = _authErrorMessage(error.code));
+      if (mounted) {
+        setState(() => _error = _authErrorMessage(error.code));
+      }
+    } on FirebaseException catch (error) {
+      if (mounted) {
+        setState(() => _error = _profilePhotoError(error));
+      }
+    } on ArgumentError catch (error) {
+      if (mounted) {
+        setState(() => _error = error.message?.toString());
+      }
     } on StateError catch (error) {
-      setState(() => _error = error.message);
+      if (mounted) {
+        setState(() => _error = error.message);
+      }
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -781,12 +1086,36 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             ),
           ),
           const SizedBox(height: 28),
-          if (_registering)
+          if (_registering) ...[
+            Center(
+              child: Column(
+                children: [
+                  PlayerAvatar(
+                    displayName: _displayNameController.text,
+                    photoBytes: _selectedProfilePhoto,
+                    radius: 36,
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : _pickSignupPhoto,
+                    icon: const Icon(Icons.add_a_photo_outlined),
+                    label: Text(
+                      _selectedProfilePhoto == null
+                          ? 'Add profile photo (optional)'
+                          : 'Change profile photo',
+                    ),
+                  ),
+                  const Text('JPG image, up to 5 MB'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: _displayNameController,
               textInputAction: TextInputAction.next,
               decoration: const InputDecoration(labelText: 'Display name'),
             ),
+          ],
           TextField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
@@ -1223,6 +1552,13 @@ class ChallengesScreen extends ConsumerWidget {
     String userId,
     ChallengeStatus response,
   ) async {
+    DateTime? alternativeDate;
+    if (response == ChallengeStatus.alternativeDateProposed) {
+      alternativeDate = await _chooseMatchDate(context);
+      if (alternativeDate == null || !context.mounted) {
+        return;
+      }
+    }
     try {
       await ref.read(
         challengeResponseProvider(
@@ -1231,6 +1567,7 @@ class ChallengesScreen extends ConsumerWidget {
             respondentId: userId,
             response: response,
             respondedAt: DateTime.now(),
+            alternativeDate: alternativeDate,
           ),
         ).future,
       );
@@ -1359,11 +1696,23 @@ class _ChallengeCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              isIncoming ? 'Incoming Normal challenge' : 'Outgoing challenge',
+              '${isIncoming ? 'Incoming' : 'Outgoing'} '
+              '${challenge.type == ChallengeType.god ? 'G.O.D.' : 'Normal'} '
+              'challenge',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             Text('Status: ${challenge.status.name}'),
+            if (challenge.proposedDate != null)
+              Text(
+                'Match date: ${_formatChallengeDate(challenge.proposedDate!)}',
+              ),
+            if (challenge.status == ChallengeStatus.alternativeDateProposed &&
+                challenge.alternativeDate != null)
+              Text(
+                'Proposed alternative: '
+                '${_formatChallengeDate(challenge.alternativeDate!)}',
+              ),
             if (challenge.status == ChallengeStatus.accepted &&
                 result == null) ...[
               const SizedBox(height: 12),
@@ -1376,6 +1725,7 @@ class _ChallengeCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text('Result: ${result!.score} (${result!.status.name})'),
               if (result!.status == ResultStatus.submitted &&
+                  result!.submittedBy != currentUserId &&
                   (challenge.challengerId == currentUserId ||
                       challenge.challengedId == currentUserId)) ...[
                 const SizedBox(height: 12),
@@ -1412,12 +1762,42 @@ class _ChallengeCard extends StatelessWidget {
                 ],
               ),
             ],
+            if (isIncoming && challenge.status == ChallengeStatus.pending)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: OutlinedButton(
+                  onPressed: () =>
+                      onRespond(ChallengeStatus.alternativeDateProposed),
+                  child: const Text('Propose new date'),
+                ),
+              ),
+            if (!isIncoming &&
+                challenge.status == ChallengeStatus.alternativeDateProposed)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Wrap(
+                  spacing: 8,
+                  children: [
+                    FilledButton(
+                      onPressed: () => onRespond(ChallengeStatus.accepted),
+                      child: const Text('Accept new date'),
+                    ),
+                    OutlinedButton(
+                      onPressed: () => onRespond(ChallengeStatus.rejected),
+                      child: const Text('Reject proposal'),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
     );
   }
 }
+
+String _formatChallengeDate(DateTime date) =>
+    '${date.day}/${date.month}/${date.year}';
 
 class _ScoreDialog extends StatefulWidget {
   const _ScoreDialog();
@@ -1439,12 +1819,22 @@ class _ScoreDialogState extends State<_ScoreDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Submit match result'),
-      content: TextField(
-        controller: _controller,
-        decoration: const InputDecoration(
-          labelText: 'Score',
-          hintText: '6-4, 6-3',
-        ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Either player can report the score; the opponent reviews it.',
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            decoration: const InputDecoration(
+              labelText: 'Score (challenger first)',
+              hintText: '6-4, 6-3',
+            ),
+          ),
+        ],
       ),
       actions: [
         TextButton(

@@ -35,14 +35,19 @@ stretch goals and must wait until essential workflows are stable.
 - Primary platform: Android
 - Team: Tugume Keith Kaganda, Niwamanya Joel, Moola Joseph
 
-## Current confirmed state (4 November 2026)
+## Current confirmed state (5 November 2026)
 
 Firebase Authentication, Firestore and FCM are configured in the Android app.
 The ladder screen reads ordered ranking documents from Firestore and now
 subscribes to ranking changes. The development Firestore currently contains a
 24-player seed snapshot; it is still data supplied as a starting point, not a
 ranking engine. Authentication and role-guarded read-only Admin/Treasurer
-screens are present.
+screens are present. Registration now supports optional profile-photo uploads
+to Firebase Storage; the profile and ladder can display photos for players
+whose roster documents are linked to their Auth UID. Storage bucket setup and
+rules deployment remain owner actions. The player profile now reads submitted
+match scores, result status and opponents from Firestore; this is match-score
+history, not an authoritative ladder-point total.
 
 The full official MUK Ladder Rules, 2025 document is not in the repository,
 and its applicability to the 2026 tournament is unconfirmed. The provisional
