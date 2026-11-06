@@ -41,5 +41,8 @@ class DemoAuthService implements AuthService {
   }
 
   @override
+  Future<void> recordActivity() async {}
+
+  @override
   Future<void> signOut() async {}
 }

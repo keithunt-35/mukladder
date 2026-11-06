@@ -30,9 +30,21 @@ The UI invokes application workflows and repositories map Firebase data to
 domain models. The ladder subscribes to Firestore `rankings` snapshots, which
 allows the UI to reflect server updates without a hardcoded in-app player list.
 The current 24-player development seed is still a static starting dataset.
-Trusted backend functions for rule-sensitive ranking and administrative
-mutations have not yet been implemented; do not present local calculations as
+Trusted backend workflows for match-result ranking and other tournament
+operations are still incomplete; do not present local calculations as
 official.
+
+New player accounts start outside the ladder. A trusted callable function
+creates the join request and persistent Admin notifications. After paying
+externally, a player submits an MTN MoMo reference; this is only a claim.
+`approvePlayerRegistration` requires the reference to be reported, checks the
+caller's Admin role, and atomically records Admin-verified payment, inserts
+the initial position, activates membership and writes audit/notification
+records. The merchant account is not configured and the app does not charge or
+verify payments automatically. Client Firestore rules continue to deny
+ranking writes. App activity uses server timestamps on sign-in, resume and a
+five-minute foreground heartbeat; the ladder listens for those player
+document changes.
 
 ## Backend responsibilities
 
@@ -43,9 +55,10 @@ official.
   `profilePhotos/{uid}/profile.jpg`. Storage rules restrict uploads and
   replacements to that authenticated owner and allow signed-in players to view
   ladder photos.
-- Cloud Functions are the planned authority for privileged ranking changes,
-  deadline handling, cooldowns, inactivity penalties and notifications; these
-  workflows remain outstanding.
+- Cloud Functions are the authority for join/payment reports, registration
+  approval, manual points and initial ranking placement. Match-result ranking
+  changes, deadline handling,
+  cooldowns, inactivity penalties and notifications remain outstanding.
 - Firestore Security Rules enforce authentication, ownership and role
   boundaries.
 - Scheduled operations must be idempotent and safe to retry.
@@ -67,6 +80,10 @@ ranking documents with player documents and refreshes when either collection
 changes. Existing seeded players must have a matching player document linked to
 their Auth UID (`userId`) before their uploaded photo is associated with that
 ranking entry.
+
+Player signups use a pending-registration status. The shell blocks pending
+accounts from player features, and the profile stream reflects approval
+immediately after the Cloud Function updates the user document.
 
 The Profile match history reads the signed-in user's challenges, fetches the
 associated result records and resolves opponent names from player documents.

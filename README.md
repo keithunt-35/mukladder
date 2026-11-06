@@ -84,7 +84,9 @@ The current app requires a sign-in to the configured Firebase project.
 2. View the current ranking feed. The development Firestore collection
    currently contains a 24-player Week 7 Day 5 seed.
 3. Open **Profile** to see your account and any role-based workspace links.
-4. Admin accounts can open the read-only operational overview.
+4. Admin accounts can review pending signups, confirm payment and assign an
+   initial ladder position. This requires the deployed `approvePlayerRegistration`
+   Cloud Function and Firestore Rules.
 5. On sign-up, players can optionally choose a profile photo; signed-in users
    can change it from **Profile**.
 6. **Profile** displays submitted match scores with each opponent and result
@@ -112,10 +114,13 @@ The debug APK is written to
   backend are confirmed.
 - The full official rules document and confirmation of 2026 rule applicability
   are still needed.
-- Trusted backend ranking transitions and administrative mutations are not
-  implemented; the current admin dashboard is read-only.
-- Result submission, ranking updates, notifications and administrative
-  dashboards are not implemented yet.
+- Initial registration approval uses a callable backend workflow, but the
+  function and revised Firestore Rules must be deployed before it works against
+  Firebase. Result-based ranking transitions remain unimplemented.
+- Firebase CLI is required to deploy `functions/approvePlayerRegistration`
+  and `firestore.rules`; no Firebase deployment is performed by the app build.
+- Scheduled walkovers, rule-authoritative result ranking updates and event-
+  driven push notifications are not implemented yet.
 - Rule-dependent behavior must be verified against the official MUK Ladder
   Rules, 2025 document before being treated as final.
 
