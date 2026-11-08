@@ -57,6 +57,11 @@ The player profile now reads submitted match scores, result status and
 opponents from Firestore; this is match-score history, not an authoritative
 ladder-point total.
 
+Pending player accounts open the player dashboard with the Join Ladder/payment
+workflow. The member directory and standings remain restricted to approved
+members. Admin/Treasurer roles are assigned by the project owner; the app does
+not use a shared client-side Admin key.
+
 The full official MUK Ladder Rules, 2025 document is not in the repository,
 and its applicability to the 2026 tournament is unconfirmed. The provisional
 Dart ranking calculator is not authoritative. Trusted backend match-result

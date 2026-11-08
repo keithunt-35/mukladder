@@ -1,8 +1,15 @@
 # Next Steps
 
-## Current state — 6 November 2026
+## Current state — 8 November 2026
 
 - The Android app uses Firebase Authentication and Firestore.
+- The in-app logo and Android launcher now share the canonical
+  `assets/brand/app_brand_mark.png`. The connected tablet needs a visual
+  home-screen check after installing the latest build.
+- Pending players can view their Player dashboard and request membership;
+  each new request creates a persistent in-app alert for every configured
+  Admin. FCM push alerts are not implemented. Deploy the current Cloud
+  Function before relying on new alerts in Firebase.
 - The ladder screen streams ordered documents from the `rankings` collection;
   its current 24-player development seed is still static source data.
 - The ranking calculator is provisional. No trusted backend updates official
@@ -22,14 +29,23 @@
   match-derived points are not implemented until official scoring rules are
   confirmed.
 - Admin role sign-in is a UI selection checked against the trusted role in the
-  user profile; it does not provision Admin accounts. Have the project owner
-  assign Admin roles through a trusted process. Firebase Emulator validation
-  and deployment of the updated Functions/Rules are still required.
+  user profile; it does not provision Admin accounts and does not use a shared
+  secret key. Have the project owner assign Admin roles through a trusted
+  process. Firebase Emulator validation and deployment of the updated
+  Functions/Rules are still required.
 - New accounts can request to join; Admins receive persistent in-app alerts.
   Players report an external MTN MoMo transaction reference and Admins must
   verify payment before approval. The merchant account is not configured, so
   there are no in-app charges or automatic payment verification yet. FCM push
   delivery and Emulator validation remain future work.
+- Successful player signup opens the player dashboard, where the Join Ladder
+  and payment workflow is shown. Pending players cannot view standings,
+  member profiles or other player features until Admin approval.
+- If signup reports that Email/Password is disabled, enable that provider in
+  Firebase Console for `mukladder-4351c`. If Firestore reports
+  `permission-denied`, deploy the current `firestore.rules` to that project.
+  An Auth account may already exist; sign in with that email to retry creating
+  its missing player profile rather than trying to register it again.
 - Profile photos can be selected at registration or changed from Profile.
   Android configuration now targets `mukladder-4351c` and
   `mukladder-4351c.firebasestorage.app`; confirm/create that bucket in Firebase

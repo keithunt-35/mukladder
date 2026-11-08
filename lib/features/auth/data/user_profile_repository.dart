@@ -57,6 +57,31 @@ class UserProfileRepository {
     return _toAppUser(uid, data);
   }
 
+  Future<AppUser> getOrCreateSignedInPlayer({
+    required String uid,
+    required String email,
+    required String displayName,
+  }) async {
+    final snapshot = await _firestore.collection('users').doc(uid).get();
+    final data = snapshot.data();
+    if (data != null) {
+      return _toAppUser(uid, data);
+    }
+
+    final player = AppUser(
+      id: uid,
+      displayName: displayName.trim().isEmpty
+          ? email.split('@').first
+          : displayName.trim(),
+      role: AppRole.player,
+      registrationApproved: false,
+      registrationStatus: 'notRequested',
+      joinRequestStatus: 'notRequested',
+    );
+    await createPlayerProfile(user: player, email: email);
+    return player;
+  }
+
   Stream<AppUser> watchCurrentUser(String uid) {
     return _firestore.collection('users').doc(uid).snapshots().map((snapshot) {
       final data = snapshot.data();

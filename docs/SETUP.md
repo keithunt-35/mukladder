@@ -30,6 +30,11 @@ an authorized project account or register a player account to use the app.
 Firebase configuration is checked into this workspace; never copy private
 credentials into the client or commit service-account files.
 
+The app and Android launcher use the same canonical image at
+`assets/brand/app_brand_mark.png`. Android's density-specific copies are in
+`android/app/src/main/res/mipmap-*/`; keep them generated from the canonical
+image so the home-screen icon matches the in-app logo.
+
 ### Windows: Kotlin cache errors when project and Pub cache are on different drives
 
 If Android builds fail with `this and base files have different roots` or
@@ -103,6 +108,9 @@ project.
 - Uses Firebase Auth, Firestore and Firebase Messaging.
 - Initializes Firebase before the application starts.
 - Provides registration, login, logout and session restoration.
+- Routes newly registered players to the player dashboard with the Join Ladder
+  workflow. Admin and Treasurer access remains owner-assigned in the trusted
+  user profile; there is no shared Admin key in the app.
 - Lets players request to join, submit an external MTN MoMo reference after
   payment, and waits for Admin verification of the UGX 40,000 fee and initial
   ladder position.
@@ -115,6 +123,27 @@ project.
 - Protects client access with the checked-in Firestore Security Rules.
 - Requests notification permission and registers foreground/background FCM
   handlers.
+
+#### Signup troubleshooting
+
+The signup screen reports Firebase's specific error instead of showing only a
+generic authentication failure:
+
+- If it says Email/Password sign-up is not enabled, open
+  **Firebase Console > Authentication > Sign-in method** for
+  `mukladder-4351c` and enable **Email/Password**.
+- If the error includes `CONFIGURATION_NOT_FOUND`, open **Firebase Console >
+  Authentication** for `mukladder-4351c`, finish setting up Authentication,
+  enable **Email/Password** under **Sign-in method**, and confirm the Android
+  app is registered in that same Firebase project.
+- If it says Firestore denied saving the profile, publish the repository's
+  current rules to that same project with
+  `firebase deploy --only firestore:rules --project mukladder-4351c`.
+  Authentication may already have created the account. Do not register that
+  email again; sign in with it after the rules are published. Sign-in retries
+  creation of a missing, least-privileged player profile.
+- For any other failure, use the displayed Firebase error code to diagnose the
+  configuration. Never share passwords or verification codes.
 
 The registration approval transaction runs in a Firebase Callable Function.
 It checks the Admin role from Firestore, verifies the payment confirmation,

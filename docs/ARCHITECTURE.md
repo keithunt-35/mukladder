@@ -20,6 +20,10 @@ The app uses Riverpod for state access and `go_router` for declarative
 navigation. The main shell exposes the ladder, profile, challenges and alerts;
 Admin and Treasurer workspaces are role-guarded.
 
+The in-app logo and Android launcher icon use the shared
+`assets/brand/app_brand_mark.png` source; Android density-specific launcher
+images are resized copies of that asset.
+
 Expected feature areas are auth, players, ladder, challenges, results,
 notifications, admin and treasurer. Do not create empty structure without a
 feature need.
@@ -81,9 +85,17 @@ changes. Existing seeded players must have a matching player document linked to
 their Auth UID (`userId`) before their uploaded photo is associated with that
 ranking entry.
 
-Player signups use a pending-registration status. The shell blocks pending
-accounts from player features, and the profile stream reflects approval
-immediately after the Cloud Function updates the user document.
+Player signups use a pending-registration status and open the player dashboard
+immediately. Pending players can request membership and report payment there;
+the member directory, rankings and other player features remain restricted
+until an Admin approves registration. The profile stream reflects approval
+immediately after the Cloud Function updates the user document. Admin and
+Treasurer roles remain owner-assigned in Firebase; the client does not accept a
+shared role-granting key.
+Each first join request creates a persistent in-app notification for every
+configured Admin, containing the player's identity and a prompt to review the
+request in the Admin workspace. Duplicate requests do not create duplicate
+alerts.
 
 The Profile match history reads the signed-in user's challenges, fetches the
 associated result records and resolves opponent names from player documents.

@@ -181,7 +181,7 @@ class AppShell extends ConsumerWidget {
     if (user != null &&
         user.role == AppRole.player &&
         !user.registrationApproved) {
-      return _RegistrationPendingScreen(user: user);
+      return const LadderScreen();
     }
     return Scaffold(
       body: navigationShell,
@@ -215,18 +215,16 @@ class AppShell extends ConsumerWidget {
   }
 }
 
-class _RegistrationPendingScreen extends ConsumerStatefulWidget {
-  const _RegistrationPendingScreen({required this.user});
+class _MembershipCard extends ConsumerStatefulWidget {
+  const _MembershipCard({required this.user});
 
   final AppUser user;
 
   @override
-  ConsumerState<_RegistrationPendingScreen> createState() =>
-      _RegistrationPendingScreenState();
+  ConsumerState<_MembershipCard> createState() => _MembershipCardState();
 }
 
-class _RegistrationPendingScreenState
-    extends ConsumerState<_RegistrationPendingScreen> {
+class _MembershipCardState extends ConsumerState<_MembershipCard> {
   final _paymentReferenceController = TextEditingController();
   bool _busy = false;
   String? _error;
@@ -246,6 +244,13 @@ class _RegistrationPendingScreenState
       await ref
           .read(membershipApplicationRepositoryProvider)
           .requestToJoinLadder();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Membership request sent to the Admin.'),
+          ),
+        );
+      }
     } on FirebaseFunctionsException catch (error) {
       if (mounted) {
         setState(() => _error = error.message ?? error.code);
@@ -295,114 +300,108 @@ class _RegistrationPendingScreenState
   @override
   Widget build(BuildContext context) {
     final requestStatus = widget.user.joinRequestStatus;
-    return Scaffold(
-      appBar: AppBar(title: const AppBrandLockup(compact: true)),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          const SizedBox(height: 40),
-          Icon(
-            requestStatus == 'paymentReported'
-                ? Icons.hourglass_top_rounded
-                : Icons.sports_tennis,
-            size: 56,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            switch (requestStatus) {
-              'paymentReported' => 'Payment submitted for verification',
-              'requested' => 'Complete your ladder membership',
-              _ => 'Join the MUKLadder',
-            },
-            style: Theme.of(context).textTheme.headlineSmall,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 12),
-          Text(switch (requestStatus) {
-            'paymentReported' =>
-              'Your payment reference '
-                  '${widget.user.paymentReference ?? 'was submitted'} '
-                  'has been sent to the Admin. They must verify the UGX '
-                  '40,000 payment before approving your place in the ladder.',
-            'requested' =>
-              'Your request has been sent to the Admin. The annual ladder '
-                  'fee is UGX 40,000. After paying using official instructions, '
-                  'submit the MTN MoMo transaction reference below.',
-            _ =>
-              'Request to join the ladder and pay the annual membership fee '
-                  'of UGX 40,000.',
-          }, textAlign: TextAlign.center),
-          if (requestStatus == 'notRequested') ...[
-            const SizedBox(height: 12),
-            const Card(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'MTN MoMo in-app payment is not configured yet. Tap Join '
-                  'Ladder to notify the Admin, then get the official payment '
-                  'instructions from them before sending money. The app will '
-                  'not charge you.',
-                  textAlign: TextAlign.center,
-                ),
-              ),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Icon(
+              requestStatus == 'paymentReported'
+                  ? Icons.hourglass_top_rounded
+                  : Icons.sports_tennis,
+              size: 44,
             ),
-          ],
-          if (requestStatus == 'requested') ...[
-            const SizedBox(height: 20),
-            TextField(
-              controller: _paymentReferenceController,
-              enabled: !_busy,
-              textCapitalization: TextCapitalization.characters,
-              decoration: const InputDecoration(
-                labelText: 'MTN MoMo transaction reference',
-                helperText: 'Submit only after you have paid UGX 40,000.',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: _busy ? null : _reportPayment,
-              icon: const Icon(Icons.receipt_long_outlined),
-              label: Text(
-                _busy ? 'Submitting...' : 'I’ve paid — submit reference',
-              ),
-            ),
-          ] else if (requestStatus == 'notRequested') ...[
-            const SizedBox(height: 20),
-            FilledButton.icon(
-              onPressed: _busy ? null : _requestMembership,
-              icon: const Icon(Icons.group_add_outlined),
-              label: Text(_busy ? 'Sending request...' : 'Join Ladder'),
-            ),
-          ] else if (requestStatus == 'paymentReported') ...[
-            const SizedBox(height: 20),
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.hourglass_top_rounded),
-                title: Text('Awaiting Admin verification'),
-                subtitle: Text(
-                  'You will be admitted to the ladder after the Admin '
-                  'verifies your payment.',
-                ),
-              ),
-            ),
-          ],
-          if (_error != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Text(
-              _error!,
+              switch (requestStatus) {
+                'paymentReported' => 'Payment submitted for verification',
+                'requested' => 'Complete your ladder membership',
+                _ => 'Join the MUKLadder',
+              },
+              style: Theme.of(context).textTheme.titleLarge,
               textAlign: TextAlign.center,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
             ),
+            const SizedBox(height: 12),
+            Text(switch (requestStatus) {
+              'paymentReported' =>
+                'Your payment reference '
+                    '${widget.user.paymentReference ?? 'was submitted'} '
+                    'has been sent to the Admin. They must verify the UGX '
+                    '40,000 payment before approving your place in the ladder.',
+              'requested' =>
+                'Your request has been sent to the Admin. The annual ladder '
+                    'fee is UGX 40,000. After paying using official instructions, '
+                    'submit the MTN MoMo transaction reference below.',
+              _ =>
+                'Request to join the ladder and pay the annual membership fee '
+                    'of UGX 40,000.',
+            }, textAlign: TextAlign.center),
+            if (requestStatus == 'notRequested') ...[
+              const SizedBox(height: 12),
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'MTN MoMo in-app payment is not configured yet. Tap Join '
+                    'Ladder to notify the Admin, then get the official payment '
+                    'instructions from them before sending money. The app will '
+                    'not charge you.',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+            if (requestStatus == 'requested') ...[
+              const SizedBox(height: 20),
+              TextField(
+                controller: _paymentReferenceController,
+                enabled: !_busy,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  labelText: 'MTN MoMo transaction reference',
+                  helperText: 'Submit only after you have paid UGX 40,000.',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _busy ? null : _reportPayment,
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: Text(
+                  _busy ? 'Submitting...' : 'I’ve paid — submit reference',
+                ),
+              ),
+            ] else if (requestStatus == 'notRequested') ...[
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: _busy ? null : _requestMembership,
+                icon: const Icon(Icons.group_add_outlined),
+                label: Text(_busy ? 'Sending request...' : 'Join Ladder'),
+              ),
+            ] else if (requestStatus == 'paymentReported') ...[
+              const SizedBox(height: 20),
+              const Card(
+                child: ListTile(
+                  leading: Icon(Icons.hourglass_top_rounded),
+                  title: Text('Awaiting Admin verification'),
+                  subtitle: Text(
+                    'You will be admitted to the ladder after the Admin '
+                    'verifies your payment.',
+                  ),
+                ),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
           ],
-          const SizedBox(height: 20),
-          FilledButton.tonal(
-            onPressed: _busy
-                ? null
-                : () => ref.read(authServiceProvider).signOut(),
-            child: const Text('Sign out'),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -417,13 +416,19 @@ class LadderScreen extends ConsumerWidget {
     if (user == null) {
       return const _AuthenticationRequiredScreen();
     }
-    final ranking = ref.watch(rankingProvider);
-    final challenges = ref
-        .watch(challengesProvider)
-        .maybeWhen(data: (items) => items, orElse: () => const <Challenge>[]);
-    final results = ref
-        .watch(resultsProvider)
-        .maybeWhen(data: (items) => items, orElse: () => const <MatchResult>[]);
+    final isPendingPlayer =
+        user.role == AppRole.player && !user.registrationApproved;
+    final ranking = isPendingPlayer ? null : ref.watch(rankingProvider);
+    final challenges = isPendingPlayer
+        ? const <Challenge>[]
+        : ref
+              .watch(challengesProvider)
+              .maybeWhen(data: (items) => items, orElse: () => const []);
+    final results = isPendingPlayer
+        ? const <MatchResult>[]
+        : ref
+              .watch(resultsProvider)
+              .maybeWhen(data: (items) => items, orElse: () => const []);
     DateTime? cooldownStartedAt;
     for (final result in results) {
       if (result.status != ResultStatus.confirmed) {
@@ -449,48 +454,71 @@ class LadderScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         children: [
+          if (isPendingPlayer) ...[
+            Text(
+              'Player dashboard',
+              style: Theme.of(context).textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            _MembershipCard(user: user),
+            const SizedBox(height: 16),
+          ],
           _LadderHero(
             displayName: user.displayName,
-            playerPosition: ranking.maybeWhen(
+            playerPosition: ranking?.maybeWhen(
               data: (entries) => _positionOf(entries, user.id),
               orElse: () => null,
             ),
-            playerCount: ranking.maybeWhen(
+            playerCount: ranking?.maybeWhen(
               data: (entries) => entries.length,
               orElse: () => null,
             ),
           ),
           const SizedBox(height: 24),
-          Text(
-            'Current standings',
-            style: Theme.of(context).textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Standings follow the ranking feed configured for this tournament.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ranking.when(
-            loading: () => const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: CircularProgressIndicator(),
+          if (isPendingPlayer) ...[
+            const Card(
+              child: ListTile(
+                leading: Icon(Icons.lock_outline),
+                title: Text('Member standings are for approved players'),
+                subtitle: Text(
+                  'The member list and ladder standings will be available '
+                  'after an Admin approves your registration.',
+                ),
               ),
             ),
-            error: (error, stackTrace) =>
-                _RankingError(onRetry: () => ref.invalidate(rankingProvider)),
-            data: (entries) => entries.isEmpty
-                ? const _EmptyRanking()
-                : _RankingList(
-                    entries: entries,
-                    currentUserId: user.id,
-                    cooldownStartedAt: cooldownStartedAt,
-                  ),
-          ),
+          ] else ...[
+            Text(
+              'Current standings',
+              style: Theme.of(context).textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Standings follow the ranking feed configured for this tournament.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ranking!.when(
+              loading: () => const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+              error: (error, stackTrace) =>
+                  _RankingError(onRetry: () => ref.invalidate(rankingProvider)),
+              data: (entries) => entries.isEmpty
+                  ? const _EmptyRanking()
+                  : _RankingList(
+                      entries: entries,
+                      currentUserId: user.id,
+                      cooldownStartedAt: cooldownStartedAt,
+                    ),
+            ),
+          ],
         ],
       ),
     );
@@ -934,6 +962,16 @@ class _RankingError extends StatelessWidget {
 }
 
 String _profilePhotoError(FirebaseException error) {
+  if (error.plugin == 'cloud_firestore') {
+    if (error.code == 'permission-denied') {
+      return 'Firebase Authentication may have created your account, but '
+          'Firestore blocked saving the player profile. Publish the current '
+          'firestore.rules to project mukladder-4351c, then sign in again to '
+          'finish setup.';
+    }
+    return 'Firestore could not save the account profile '
+        '(${error.code}: ${error.message ?? 'no additional details'}).';
+  }
   if (error.plugin == 'firebase_storage') {
     return switch (error.code) {
       'object-not-found' =>
@@ -1301,6 +1339,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           profilePhoto: _selectedProfilePhoto,
         );
         ref.invalidate(authStateProvider);
+        if (mounted) {
+          context.go('/ladder');
+        }
       } else {
         final user = await service.signIn(email: email, password: password);
         if (user.role != _signInRole) {
@@ -1320,7 +1361,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       }
     } on FirebaseAuthException catch (error) {
       if (mounted) {
-        setState(() => _error = _authErrorMessage(error.code));
+        setState(() => _error = _authErrorMessage(error));
       }
     } on FirebaseException catch (error) {
       if (mounted) {
@@ -1341,15 +1382,47 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
-  String _authErrorMessage(String code) => switch (code) {
-    'email-already-in-use' => 'That email is already registered.',
-    'invalid-credential' ||
-    'wrong-password' ||
-    'user-not-found' => 'The email or password is incorrect.',
-    'weak-password' => 'Choose a stronger password.',
-    'invalid-email' => 'Enter a valid email address.',
-    _ => 'Authentication failed. Please try again.',
-  };
+  String _authErrorMessage(FirebaseAuthException error) {
+    final backendConfigurationMissing =
+        error.message?.toUpperCase().contains('CONFIGURATION_NOT_FOUND') ??
+        false;
+    if (error.code == 'configuration-not-found' ||
+        backendConfigurationMissing) {
+      return 'Firebase Authentication is not fully configured for project '
+          'mukladder-4351c. In Firebase Console open Authentication, finish '
+          'setting it up, then enable Email/Password under Sign-in method. '
+          'Confirm the Android app is registered in this same project.';
+    }
+
+    return switch (error.code) {
+      'email-already-in-use' =>
+        'That email already has an Authentication account. Sign in instead. '
+            'If its player profile was not saved earlier, signing in will retry '
+            'the profile setup.',
+      'invalid-credential' ||
+      'wrong-password' ||
+      'user-not-found' => 'The email or password is incorrect.',
+      'weak-password' => 'Choose a stronger password (at least 6 characters).',
+      'invalid-email' => 'Enter a valid email address.',
+      'operation-not-allowed' =>
+        'Email/Password sign-up is not enabled for Firebase project '
+            'mukladder-4351c. In Firebase Console open Authentication > '
+            'Sign-in method and enable Email/Password.',
+      'network-request-failed' =>
+        'Firebase could not reach the network. Check the tablet’s internet '
+            'connection and try again.',
+      'too-many-requests' =>
+        'Firebase temporarily blocked requests from this device. Wait a few '
+            'minutes and try again.',
+      'app-not-authorized' || 'invalid-api-key' =>
+        'This Android app is not authorized by the Firebase project. Verify '
+            'the registered Android package and API key configuration.',
+      _ =>
+        'Firebase Authentication failed (${error.code}). '
+            '${error.message ?? 'Check Authentication > Sign-in method and '
+                    'the Firebase project configuration, then try again.'}',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1399,7 +1472,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Your assigned account role is checked after sign-in.',
+              'Admin and Treasurer access must be assigned by the project '
+              'owner. The selected role is checked after sign-in.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodySmall,
             ),

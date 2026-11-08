@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:go_router/go_router.dart';
 import 'package:mukladder/app/app.dart';
 import 'package:mukladder/app/app_brand.dart';
 import 'package:mukladder/features/admin/application/admin_overview_provider.dart';
@@ -42,17 +45,40 @@ void main() {
     expect(find.text('Current standings'), findsOneWidget);
     expect(find.text('Opponent'), findsOneWidget);
     expect(find.byType(AppBrandMark), findsNWidgets(2));
+    final brandImage = tester.widget<Image>(
+      find.descendant(
+        of: find.byType(AppBrandMark).first,
+        matching: find.byType(Image),
+      ),
+    );
+    expect(brandImage.image, isA<AssetImage>());
+    expect((brandImage.image as AssetImage).assetName, appBrandAssetPath);
     expect(find.byType(Banner), findsNothing);
   });
 
-  testWidgets('blocks pending registrations from player features', (
+  testWidgets('shows the player dashboard while registration is pending', (
     tester,
   ) async {
     await tester.pumpWidget(_testApp(registrationApproved: false));
     await tester.pumpAndSettle();
 
+    expect(find.text('Player dashboard'), findsOneWidget);
+    expect(find.text('MAKERERE UNIVERSITY'), findsOneWidget);
     expect(find.text('Join the MUKLadder'), findsOneWidget);
     expect(find.text('Join Ladder'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Member standings are for approved players'),
+      300,
+      scrollable: find.descendant(
+        of: find.byType(LadderScreen),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    expect(
+      find.text('Member standings are for approved players'),
+      findsOneWidget,
+    );
+    expect(find.text('Current standings'), findsNothing);
     expect(find.byType(NavigationBar), findsNothing);
   });
 
@@ -68,9 +94,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(
+      find.text('Join Ladder'),
+      300,
+      scrollable: find.descendant(
+        of: find.byType(LadderScreen),
+        matching: find.byType(Scrollable),
+      ),
+    );
     await tester.tap(find.text('Join Ladder'));
     await tester.pumpAndSettle();
     expect(membershipRepository.joinRequestCount, 1);
+    expect(find.text('Membership request sent to the Admin.'), findsOneWidget);
     expect(find.textContaining('will not charge you'), findsOneWidget);
 
     await tester.pumpWidget(
@@ -133,6 +168,132 @@ void main() {
       findsOneWidget,
     );
     expect(service.signOutCalls, 1);
+  });
+
+  testWidgets('successful player signup opens the player dashboard', (
+    tester,
+  ) async {
+    final service = _SuccessfulRegistrationAuthService();
+    final router = GoRouter(
+      initialLocation: '/signup',
+      routes: [
+        GoRoute(
+          path: '/signup',
+          builder: (context, state) => const AuthScreen(),
+        ),
+        GoRoute(
+          path: '/ladder',
+          builder: (context, state) =>
+              const Scaffold(body: Text('Player dashboard')),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [authServiceProvider.overrideWith((ref) => service)],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final createAccountToggle = find.text('New player? Create an account');
+    await _scrollToSignupControl(tester, createAccountToggle);
+    await tester.tap(createAccountToggle);
+    await tester.pumpAndSettle();
+    for (final (index, value) in [
+      (0, 'New Player'),
+      (1, 'new@example.com'),
+      (2, 'password123'),
+    ]) {
+      final field = find.byType(TextField).at(index);
+      await _scrollToSignupControl(tester, field);
+      await tester.enterText(field, value);
+    }
+    final submitButton = find.text('Create account');
+    await _scrollToSignupControl(tester, submitButton);
+    await tester.tap(submitButton);
+    await tester.pumpAndSettle();
+
+    expect(service.registerCalls, 1);
+    expect(find.text('Player dashboard'), findsOneWidget);
+    router.dispose();
+  });
+
+  testWidgets('Admin sign-in opens the Admin dashboard', (tester) async {
+    final router = GoRouter(
+      initialLocation: '/signup',
+      routes: [
+        GoRoute(
+          path: '/signup',
+          builder: (context, state) => const AuthScreen(),
+        ),
+        GoRoute(
+          path: '/admin',
+          builder: (context, state) =>
+              const Scaffold(body: Text('Admin dashboard')),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authServiceProvider.overrideWith((ref) => _AdminAuthService()),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Admin'));
+    await tester.enterText(find.byType(TextField).at(0), 'admin@example.com');
+    await tester.enterText(find.byType(TextField).at(1), 'password123');
+    await tester.tap(find.text('Sign in'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Admin dashboard'), findsOneWidget);
+    router.dispose();
+  });
+
+  testWidgets('explains when Firebase email signup is disabled', (
+    tester,
+  ) async {
+    await _expectSignupError(
+      tester,
+      FirebaseAuthException(code: 'operation-not-allowed'),
+      'Email/Password sign-up is not enabled for Firebase project',
+    );
+    expect(find.textContaining('enable Email/Password'), findsOneWidget);
+  });
+
+  testWidgets('recognizes Firebase configuration missing in unknown error', (
+    tester,
+  ) async {
+    await _expectSignupError(
+      tester,
+      FirebaseAuthException(
+        code: 'unknown',
+        message: 'An internal error has occurred. [ CONFIGURATION_NOT_FOUND ]',
+      ),
+      'Firebase Authentication is not fully configured',
+    );
+    expect(
+      find.textContaining('Confirm the Android app is registered'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('explains when Firestore blocks saving a new profile', (
+    tester,
+  ) async {
+    await _expectSignupError(
+      tester,
+      FirebaseException(plugin: 'cloud_firestore', code: 'permission-denied'),
+      'Firestore blocked saving the player profile',
+    );
+    expect(
+      find.textContaining('Publish the current firestore.rules'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('renders ladder changes emitted by Firestore stream', (
@@ -363,8 +524,8 @@ void main() {
         adminNotifications: [
           AppNotification(
             id: 'notice-1',
-            title: 'Player reported a membership payment',
-            body: 'New Member reports payment. Verify the reference.',
+            title: 'New ladder membership request',
+            body: 'New Member wants to join. Review this player in the Admin workspace.',
             createdAt: DateTime.utc(2026, 11, 6),
           ),
         ],
@@ -387,7 +548,8 @@ void main() {
       300,
       scrollable: adminScrollable,
     );
-    expect(find.text('Player reported a membership payment'), findsOneWidget);
+    expect(find.text('New ladder membership request'), findsOneWidget);
+    expect(find.textContaining('Review this player in the Admin workspace'), findsOneWidget);
     expect(find.text('Pending registrations'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('New Member'),
@@ -522,6 +684,54 @@ Widget _testApp({
   );
 }
 
+Future<void> _expectSignupError(
+  WidgetTester tester,
+  Object failure,
+  String expectedMessage,
+) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        authServiceProvider.overrideWith(
+          (ref) => _FailingSignupAuthService(failure),
+        ),
+      ],
+      child: const MaterialApp(home: AuthScreen()),
+    ),
+  );
+  await tester.pumpAndSettle();
+
+  final createAccountToggle = find.text('New player? Create an account');
+  await _scrollToSignupControl(tester, createAccountToggle);
+  await tester.tap(createAccountToggle);
+  await tester.pumpAndSettle();
+  final displayNameField = find.byType(TextField).at(0);
+  await _scrollToSignupControl(tester, displayNameField);
+  await tester.enterText(displayNameField, 'New Player');
+  final emailField = find.byType(TextField).at(1);
+  await _scrollToSignupControl(tester, emailField);
+  await tester.enterText(emailField, 'new@example.com');
+  final passwordField = find.byType(TextField).at(2);
+  await _scrollToSignupControl(tester, passwordField);
+  await tester.enterText(passwordField, 'password123');
+  final submitButton = find.text('Create account');
+  await _scrollToSignupControl(tester, submitButton);
+  await tester.tap(submitButton);
+  await tester.pumpAndSettle();
+
+  expect(find.textContaining(expectedMessage), findsOneWidget);
+}
+
+Future<void> _scrollToSignupControl(WidgetTester tester, Finder control) async {
+  for (var attempt = 0; attempt < 10 && control.evaluate().isEmpty; attempt++) {
+    await tester.drag(find.byType(ListView).first, const Offset(0, -400));
+    await tester.pumpAndSettle();
+  }
+  expect(control, findsOneWidget);
+  await tester.ensureVisible(control);
+  await tester.pumpAndSettle();
+}
+
 class _MembershipApplicationRepositoryFake
     implements MembershipApplicationRepository {
   int joinRequestCount = 0;
@@ -556,6 +766,56 @@ class _PlayerOnlyAuthService extends DemoAuthService {
   @override
   Future<void> signOut() async {
     signOutCalls++;
+  }
+}
+
+class _SuccessfulRegistrationAuthService extends DemoAuthService {
+  var registerCalls = 0;
+
+  @override
+  Future<AppUser> register({
+    required String email,
+    required String password,
+    required String displayName,
+    Uint8List? profilePhoto,
+  }) async {
+    registerCalls++;
+    return AppUser(
+      id: 'new-player',
+      displayName: displayName,
+      role: AppRole.player,
+      registrationApproved: false,
+      registrationStatus: 'notRequested',
+      joinRequestStatus: 'notRequested',
+    );
+  }
+}
+
+class _AdminAuthService extends DemoAuthService {
+  @override
+  Future<AppUser> signIn({
+    required String email,
+    required String password,
+  }) async => const AppUser(
+    id: 'admin-account',
+    displayName: 'Ladder Admin',
+    role: AppRole.admin,
+  );
+}
+
+class _FailingSignupAuthService extends DemoAuthService {
+  _FailingSignupAuthService(this.failure);
+
+  final Object failure;
+
+  @override
+  Future<AppUser> register({
+    required String email,
+    required String password,
+    required String displayName,
+    Uint8List? profilePhoto,
+  }) async {
+    throw failure;
   }
 }
 

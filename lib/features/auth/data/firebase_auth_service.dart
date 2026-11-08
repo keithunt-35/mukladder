@@ -22,6 +22,21 @@ class FirebaseAuthService implements AuthService {
   final UserProfileRepository _profileRepository;
   final FirebaseProfilePhotoRepository _profilePhotoRepository;
 
+  String _profileCreationFailure(FirebaseException error) {
+    if (error.plugin == 'cloud_firestore' &&
+        error.code == 'permission-denied') {
+      return 'Firebase Authentication created your account, but Firestore '
+          'blocked saving its player profile. Publish the current firestore.rules '
+          'to project mukladder-4351c, then sign in again to finish setup '
+          '(cloud_firestore/permission-denied).';
+    }
+    return 'Firebase Authentication created your account, but the Firestore '
+        'player profile could not be saved '
+        '(${error.plugin}/${error.code}: '
+        '${error.message ?? 'no additional details'}). Sign in again after '
+        'fixing the Firebase setup.';
+  }
+
   @override
   Stream<AppUser?> get authStateChanges {
     late final StreamController<AppUser?> controller;
@@ -86,7 +101,11 @@ class FirebaseAuthService implements AuthService {
     if (user == null) {
       throw StateError('Firebase returned no signed-in user.');
     }
-    return _profileRepository.getCurrentUser(user.uid);
+    return _profileRepository.getOrCreateSignedInPlayer(
+      uid: user.uid,
+      email: user.email ?? email.trim(),
+      displayName: user.displayName ?? '',
+    );
   }
 
   @override
@@ -121,7 +140,24 @@ class FirebaseAuthService implements AuthService {
       registrationStatus: 'notRequested',
       joinRequestStatus: 'notRequested',
     );
-    await _profileRepository.createPlayerProfile(user: appUser, email: email);
+    try {
+      await _profileRepository.createPlayerProfile(
+        user: appUser,
+        email: email.trim(),
+      );
+    } on FirebaseException catch (error) {
+      try {
+        await _firebaseAuth.signOut();
+      } on FirebaseAuthException catch (signOutError) {
+        throw StateError(
+          'Your Authentication account was created, but its player profile '
+          'could not be saved and sign-out failed. '
+          '${_profileCreationFailure(error)} '
+          '${signOutError.message ?? signOutError.code}',
+        );
+      }
+      throw StateError(_profileCreationFailure(error));
+    }
 
     if (profilePhoto == null) {
       return appUser;

@@ -4,6 +4,66 @@
 
 Phase 5 — Administration and advanced rules preparation.
 
+## Shared branding and pending-player dashboard — 2026-11-08
+
+- The in-app brand mark and Android launcher now use the same canonical
+  `assets/brand/app_brand_mark.png`; launcher density images are generated
+  from that source and adaptive-icon layers were removed to avoid a different
+  launcher composition.
+- Pending players see an explicitly labeled Player dashboard with membership
+  status and request actions. Member standings remain restricted until
+  approval.
+- Each new join request creates a persistent notification for every configured
+  Admin, identifying the player and directing the Admin to review the request.
+  The player sees an in-app confirmation after the callable succeeds. These
+  are in-app alerts; FCM push delivery is not implemented.
+- `flutter test --no-pub`: all 40 Flutter tests passed.
+- `flutter analyze --no-pub`: no issues found.
+- `npm test` in `functions/`: all 10 tests passed.
+- Verified all five launcher-density PNGs are pixel-identical to resized
+  versions of the canonical logo. `git diff --check` passed.
+- `flutter build apk --debug --no-pub` succeeded; installed and launched on
+  the connected Samsung SM-X115 tablet running Android 16.
+- The live Firebase Callable Function was not deployed; deploy the current
+  Functions code before expecting new alerts in the configured Firebase
+  project.
+
+## Player dashboard entry and role routing
+
+- Successful player signup now navigates directly to the player dashboard;
+  successful Admin/Treasurer sign-in continues to route to the role-specific
+  workspace.
+- Moved the Join Ladder, payment reference and verification states onto the
+  player dashboard. Pending players can use membership actions there while
+  standings, the member directory and other player features remain unavailable
+  until Admin approval.
+- Kept Admin and Treasurer roles owner-assigned in Firebase. No shared Admin
+  key is accepted or stored in the app.
+- Added widget coverage for pending-player dashboard access and signup/Admin
+  navigation. Firestore rules do not change; pending users still cannot read
+  the private player and ranking collections.
+- `flutter analyze --no-pub` reports no issues and all 40 Flutter tests pass.
+  The debug APK built successfully and was installed/launched on the connected
+  Samsung SM-X115 tablet.
+
+## Firebase signup diagnostics
+
+- Replaced the generic signup failure text with Firebase-specific guidance for
+  disabled Email/Password sign-up, duplicate accounts, invalid credentials,
+  network/rate-limit failures, and Android app authorization errors.
+- Recognizes the backend `CONFIGURATION_NOT_FOUND` detail even when Flutter
+  reports the outer Firebase Auth code as `unknown`.
+- When Authentication creates an account but Firestore profile creation fails,
+  the app signs out and explains the Firestore error. Signing in again retries
+  creation of a missing player profile with the least-privileged player role.
+- Added widget coverage for disabled Email/Password and Firestore
+  `permission-denied`; the full Flutter suite passes (37 tests) and targeted
+  analysis reports no issues.
+- Firebase Console settings and deployed Firestore Rules still need to be
+  confirmed by the project owner. The debug APK built successfully and was
+  installed/launched on the connected Samsung SM-X115 tablet; Android's
+  notification-permission prompt appeared on first launch.
+
 ## Registration approval and live activity — 2026-11-05
 
 - New player accounts are created as pending and cannot enter the ladder,

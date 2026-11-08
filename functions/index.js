@@ -308,7 +308,7 @@ exports.requestToJoinLadder = onCall(async (request) => {
     addAdminNotifications(transaction, adminSnapshot, {
       type: 'ladderJoinRequested',
       title: 'New ladder membership request',
-      body: `${userData.displayName} (${userData.email}) wants to join the ladder. Membership fee: UGX 40,000.`,
+      body: `${userData.displayName} (${userData.email}) wants to join the ladder. Review this player in the Admin workspace to approve their request. Membership fee: UGX 40,000.`,
       entityId: userId,
     });
     transaction.create(auditReference, {
