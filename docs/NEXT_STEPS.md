@@ -1,15 +1,11 @@
 # Next Steps
 
-## Current state — 8 November 2026
+## Current state — 9 November 2026
 
 - The Android app uses Firebase Authentication and Firestore.
 - The in-app logo and Android launcher now share the canonical
-  `assets/brand/app_brand_mark.png`. The connected tablet needs a visual
-  home-screen check after installing the latest build.
-- Pending players can view their Player dashboard and request membership;
-  each new request creates a persistent in-app alert for every configured
-  Admin. FCM push alerts are not implemented. Deploy the current Cloud
-  Function before relying on new alerts in Firebase.
+  `assets/brand/app_brand_mark.png`.
+- Pending players can view their Player dashboard and request membership, with the bottom navigation bar (`NavigationBar`) fully accessible across all tabs. Each new request creates a persistent in-app alert for every configured Admin. FCM push alerts are not implemented. Deploy the current Cloud Function before relying on new alerts in Firebase.
 - The ladder screen streams ordered documents from the `rankings` collection;
   its current 24-player development seed is still static source data.
 - The ranking calculator is provisional. No trusted backend updates official

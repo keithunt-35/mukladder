@@ -4,6 +4,11 @@
 
 Phase 5 — Administration and advanced rules preparation.
 
+## Restoration of Bottom Navigation Bar for Pending Players — 2026-11-09
+
+- Restored the bottom `NavigationBar` in `AppShell` for pending/unapproved players so the bottom navigation bar remains accessible across all tabs.
+- Updated widget tests (`widget_test.dart`) and verified all 40 Flutter tests pass successfully (`flutter test`).
+
 ## Shared branding and pending-player dashboard — 2026-11-08
 
 - The in-app brand mark and Android launcher now use the same canonical

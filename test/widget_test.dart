@@ -63,6 +63,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Player dashboard'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('MAKERERE UNIVERSITY'),
+      300,
+      scrollable: find.descendant(
+        of: find.byType(LadderScreen),
+        matching: find.byType(Scrollable),
+      ),
+    );
     expect(find.text('MAKERERE UNIVERSITY'), findsOneWidget);
     expect(find.text('Join the MUKLadder'), findsOneWidget);
     expect(find.text('Join Ladder'), findsOneWidget);
@@ -79,7 +87,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Current standings'), findsNothing);
-    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byType(NavigationBar), findsOneWidget);
   });
 
   testWidgets('player can request to join and report an external payment', (
@@ -119,7 +127,15 @@ void main() {
     expect(find.text('I’ve paid — submit reference'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'MTN-123456');
-    await tester.tap(find.text('I’ve paid — submit reference'));
+    await tester.drag(
+      find.descendant(
+        of: find.byType(LadderScreen),
+        matching: find.byType(ListView),
+      ),
+      const Offset(0, -300),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('I’ve paid — submit reference').first);
     await tester.pumpAndSettle();
     expect(membershipRepository.paymentReferences, ['MTN-123456']);
   });
