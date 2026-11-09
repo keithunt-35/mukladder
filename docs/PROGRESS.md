@@ -4,6 +4,155 @@
 
 Phase 5 — Administration and advanced rules preparation.
 
+## Shared branding and pending-player dashboard — 2026-11-08
+
+- The in-app brand mark and Android launcher now use the same canonical
+  `assets/brand/app_brand_mark.png`; launcher density images are generated
+  from that source and adaptive-icon layers were removed to avoid a different
+  launcher composition.
+- Pending players see an explicitly labeled Player dashboard with membership
+  status and request actions. Member standings remain restricted until
+  approval.
+- Each new join request creates a persistent notification for every configured
+  Admin, identifying the player and directing the Admin to review the request.
+  The player sees an in-app confirmation after the callable succeeds. These
+  are in-app alerts; FCM push delivery is not implemented.
+- `flutter test --no-pub`: all 40 Flutter tests passed.
+- `flutter analyze --no-pub`: no issues found.
+- `npm test` in `functions/`: all 10 tests passed.
+- Verified all five launcher-density PNGs are pixel-identical to resized
+  versions of the canonical logo. `git diff --check` passed.
+- `flutter build apk --debug --no-pub` succeeded; installed and launched on
+  the connected Samsung SM-X115 tablet running Android 16.
+- The live Firebase Callable Function was not deployed; deploy the current
+  Functions code before expecting new alerts in the configured Firebase
+  project.
+
+## Player dashboard entry and role routing
+
+- Successful player signup now navigates directly to the player dashboard;
+  successful Admin/Treasurer sign-in continues to route to the role-specific
+  workspace.
+- Moved the Join Ladder, payment reference and verification states onto the
+  player dashboard. Pending players can use membership actions there while
+  standings, the member directory and other player features remain unavailable
+  until Admin approval.
+- Kept Admin and Treasurer roles owner-assigned in Firebase. No shared Admin
+  key is accepted or stored in the app.
+- Added widget coverage for pending-player dashboard access and signup/Admin
+  navigation. Firestore rules do not change; pending users still cannot read
+  the private player and ranking collections.
+- `flutter analyze --no-pub` reports no issues and all 40 Flutter tests pass.
+  The debug APK built successfully and was installed/launched on the connected
+  Samsung SM-X115 tablet.
+
+## Firebase signup diagnostics
+
+- Replaced the generic signup failure text with Firebase-specific guidance for
+  disabled Email/Password sign-up, duplicate accounts, invalid credentials,
+  network/rate-limit failures, and Android app authorization errors.
+- Recognizes the backend `CONFIGURATION_NOT_FOUND` detail even when Flutter
+  reports the outer Firebase Auth code as `unknown`.
+- When Authentication creates an account but Firestore profile creation fails,
+  the app signs out and explains the Firestore error. Signing in again retries
+  creation of a missing player profile with the least-privileged player role.
+- Added widget coverage for disabled Email/Password and Firestore
+  `permission-denied`; the full Flutter suite passes (37 tests) and targeted
+  analysis reports no issues.
+- Firebase Console settings and deployed Firestore Rules still need to be
+  confirmed by the project owner. The debug APK built successfully and was
+  installed/launched on the connected Samsung SM-X115 tablet; Android's
+  notification-permission prompt appeared on first launch.
+
+## Registration approval and live activity — 2026-11-05
+
+- New player accounts are created as pending and cannot enter the ladder,
+  profile, challenges or alerts until approved.
+- Added a live Admin queue for pending signups. Approval requires manual
+  confirmation of the UGX 40,000 payment and an Admin-assigned initial
+  position; the transaction updates membership, payment status, ladder
+  positions and an immutable audit event together.
+- Authenticated app sessions update `lastActivityAt` with Firestore server
+  timestamps on sign-in, resume and every five minutes in the foreground.
+  The ladder listens to player changes and displays local date and time.
+- Tightened Firestore rules for pending registrations, server-owned activity
+  timestamps, Admin approval, initial ranking insertion and audit records.
+- Removed the Flutter debug banner.
+- The callable function, these rules and the privileged workflow still require
+  Firebase Emulator Suite validation and deployment. Existing Firebase role
+  documents must designate the Admin securely; the client cannot assign roles.
+
+## Profile photo Storage diagnosis — 2026-11-05
+
+- Confirmed the Android Firebase config and Flutter options both name
+  `mukladder.firebasestorage.app`.
+- Unauthenticated checks of that bucket and the legacy
+  `mukladder.appspot.com` bucket returned HTTP 404. This does not replace
+  confirmation in the Firebase Console, but indicates that a usable bucket
+  has not been verified for this project.
+- Firebase CLI is not installed here, so bucket provisioning and Storage Rules
+  deployment could not be performed. The owner must confirm/create the bucket
+  (check any billing prompt first) and deploy `storage.rules`.
+- Updated profile-photo errors to direct users to the configured bucket and
+  Firebase Storage Files.
+- `flutter analyze --no-pub`: passed; `flutter test --no-pub`: all 32 tests
+  passed; `flutter build apk --debug --no-pub`: passed.
+- Installed and launched the debug APK on the connected Samsung SM-X115 tablet
+  (Android 16). Profile-photo upload still requires the Firebase owner to
+  confirm/create the Storage bucket and deploy the reviewed rules.
+
+## Admin role selection and points — 2026-11-05
+
+- Added Player, Admin and Treasurer sign-in choices. The selection is checked
+  against the role in the trusted user profile; mismatched accounts are signed
+  out, and the UI cannot grant a role.
+- Added a live Admin list of every player's points total and a positive,
+  reason-required manual points award action.
+- Added the `addPlayerPoints` callable transaction with Admin authorization,
+  approved-player validation, retry idempotency, and immutable point-event and
+  audit records. Firestore Rules deny client reads/writes to these records
+  except Admin reads. Point awards do not alter ladder positions.
+- Added role-mismatch and Admin-points UI tests plus pure JavaScript tests for
+  points validation and totals. `flutter analyze --no-pub` passed, all 33
+  Flutter tests passed, and all 7 Cloud Functions tests passed.
+- Firebase Emulator validation and deployment of the callable and Firestore
+  Rules remain pending; no Firebase project data was changed.
+
+## Firebase project reconfiguration — 2026-11-05
+
+- FlutterFire generated Android configuration for project
+  `mukladder-4351c`; `.firebaserc` uses the `development` alias.
+- Removed a duplicate Google Services Gradle plugin declaration from
+  `android/build.gradle.kts`. The canonical version remains declared once in
+  `android/settings.gradle.kts` (4.3.15), resolving the 4.5.0/4.3.15 classpath
+  conflict reported by `flutter run`.
+- Build/install results for this configuration are recorded after validation.
+
+## Join request and payment report workflow — 2026-11-06
+
+- New accounts start outside the ladder with `notRequested` membership status.
+- Added a Join Ladder action that creates a trusted backend request and sends
+  persistent in-app alerts to all configured Admin accounts.
+- Added external MTN MoMo reference reporting. The reference is stored as
+  reported (not paid) and creates a second Admin notification and audit event.
+- Admins see live membership alerts and transaction references in the queue.
+  Approval is available only for a reported payment and requires an explicit
+  Admin confirmation that it was independently verified; the trusted
+  transaction then activates membership and assigns the initial rank.
+- Merchant setup is not ready: the app does not initiate or automatically
+  verify payments. Players must obtain official payment instructions from the
+  authorized Admin/Treasurer. Admin alerts currently appear in the app rather
+  than as FCM push notifications.
+- Approval is gated on an Admin explicitly confirming external payment
+  verification; the transaction records the reported reference and notifies the
+  player after approval.
+- `flutter analyze --no-pub`: passed; `flutter test --no-pub`: all 35 tests
+  passed; `npm --prefix functions test`: all 10 tests passed.
+- `flutter build apk --debug --no-pub`: passed. Installed and launched on the
+  connected Samsung SM-X115 tablet (Android 16).
+- The updated Functions and Firestore Rules still need Emulator testing and
+  deployment to `mukladder-4351c`. No live backend changes were made.
+
 ## Phase 6 foundation started on 2026-10-23
 
 - Added a dedicated pitfalls log in `docs/PITFALLS.md`.

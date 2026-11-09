@@ -16,5 +16,7 @@ abstract interface class AuthService {
 
   Future<AppUser> updateProfilePhoto({required Uint8List profilePhoto});
 
+  Future<void> recordActivity();
+
   Future<void> signOut();
 }

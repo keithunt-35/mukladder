@@ -36,20 +36,31 @@ official scoring and deadline policy must be verified before production use.
 ### `users/{uid}`
 
 `uid`, `displayName`, `email`, `photoUrl`, `photoStoragePath`, `role`,
-`status`, `createdAt`, `updatedAt`.
+`status`, `registrationStatus`, `joinRequestStatus`, `paymentStatus`,
+`paymentReference`, `joinRequestedAt`, `paymentReportedAt`, `lastActivityAt`,
+`approvedBy`, `approvedAt`, `createdAt`, `updatedAt`.
 The role is written only by an authorized backend/admin workflow.
+New player documents start at `registrationStatus: notRequested` and
+`joinRequestStatus: notRequested`. Requesting to join sets status to pending
+and sends Admin notifications. After paying externally, the player submits an
+MTN MoMo transaction reference; this is a claim only, not payment
+confirmation. Admins must verify it externally before approval marks payment
+paid and membership approved.
 
 ### `players/{playerId}`
 
 `userId`, `displayName`, `position`, `lastActivityAt`, `registrationStatus`,
-`paymentStatus`, `photoUrl`, `active`, `createdAt`, `updatedAt`.
+`joinRequestStatus`, `paymentStatus`, `paymentReference`, `photoUrl`, `active`,
+`createdAt`, `updatedAt`.
 The app also stores `photoStoragePath` on linked profile documents.
 
 Profile photos are stored in Firebase Storage at
 `profilePhotos/{uid}/profile.jpg`. The matching download URL is copied to the
 user profile and linked player document. New registrations begin with a
-pending, inactive player document; an authorized workflow must approve and
-associate existing tournament roster entries with the player's Auth UID.
+pending, inactive player document. The Admin approval transaction assigns the
+manually selected initial position and shifts later positions; it rejects
+existing gaps or duplicate positions. Server timestamps record last activity
+when the app opens, resumes and remains foregrounded.
 
 The Profile match history joins the signed-in player's challenge records with
 their `results` documents and the opponent's public player profile. The score
@@ -73,6 +84,16 @@ confirmed scoring rules and a trusted backend.
 `playerId`, `position`, `effectiveAt`, `sourceResultId`, `version`.
 Official ranking mutations are backend-only and should use a transaction or
 equivalent concurrency-safe operation.
+
+### `playerPoints/{playerId}` and `playerPointEvents/{requestId}`
+
+`playerPoints` stores `playerId`, `totalPoints`, `createdAt`, `updatedAt` and
+`updatedBy`. It is an Admin-readable, client-read-only total. The callable
+`addPlayerPoints` accepts positive whole-number awards with a required reason,
+updates the total transactionally and appends an immutable event and audit
+record. Request IDs make retries idempotent. These manual points do not change
+ladder positions; point scoring from match outcomes remains unimplemented
+until the official rules are confirmed.
 
 ### `auditEvents/{eventId}`
 

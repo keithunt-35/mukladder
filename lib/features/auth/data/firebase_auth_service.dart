@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -21,9 +22,71 @@ class FirebaseAuthService implements AuthService {
   final UserProfileRepository _profileRepository;
   final FirebaseProfilePhotoRepository _profilePhotoRepository;
 
+  String _profileCreationFailure(FirebaseException error) {
+    if (error.plugin == 'cloud_firestore' &&
+        error.code == 'permission-denied') {
+      return 'Firebase Authentication created your account, but Firestore '
+          'blocked saving its player profile. Publish the current firestore.rules '
+          'to project mukladder-4351c, then sign in again to finish setup '
+          '(cloud_firestore/permission-denied).';
+    }
+    return 'Firebase Authentication created your account, but the Firestore '
+        'player profile could not be saved '
+        '(${error.plugin}/${error.code}: '
+        '${error.message ?? 'no additional details'}). Sign in again after '
+        'fixing the Firebase setup.';
+  }
+
   @override
-  Stream<AppUser?> get authStateChanges =>
-      _firebaseAuth.authStateChanges().asyncMap(_loadAppUser);
+  Stream<AppUser?> get authStateChanges {
+    late final StreamController<AppUser?> controller;
+    StreamSubscription<User?>? authSubscription;
+    StreamSubscription<AppUser>? profileSubscription;
+    var generation = 0;
+
+    controller = StreamController<AppUser?>(
+      onListen: () {
+        authSubscription = _firebaseAuth.authStateChanges().listen(
+          (user) {
+            final currentGeneration = ++generation;
+            final previousProfileSubscription = profileSubscription;
+            profileSubscription = null;
+            if (previousProfileSubscription != null) {
+              unawaited(previousProfileSubscription.cancel());
+            }
+            if (user == null) {
+              controller.add(null);
+              return;
+            }
+
+            profileSubscription = _profileRepository
+                .watchCurrentUser(user.uid)
+                .listen(
+                  (appUser) {
+                    if (currentGeneration == generation) {
+                      controller.add(appUser);
+                    }
+                  },
+                  onError: (Object error, StackTrace stackTrace) {
+                    if (currentGeneration == generation) {
+                      controller.addError(error, stackTrace);
+                    }
+                  },
+                );
+          },
+          onError: (Object error, StackTrace stackTrace) {
+            controller.addError(error, stackTrace);
+          },
+        );
+      },
+      onCancel: () async {
+        generation++;
+        await authSubscription?.cancel();
+        await profileSubscription?.cancel();
+      },
+    );
+    return controller.stream;
+  }
 
   @override
   Future<AppUser> signIn({
@@ -34,11 +97,15 @@ class FirebaseAuthService implements AuthService {
       email: email.trim(),
       password: password,
     );
-    final appUser = await _loadAppUser(credential.user);
-    if (appUser == null) {
+    final user = credential.user;
+    if (user == null) {
       throw StateError('Firebase returned no signed-in user.');
     }
-    return appUser;
+    return _profileRepository.getOrCreateSignedInPlayer(
+      uid: user.uid,
+      email: user.email ?? email.trim(),
+      displayName: user.displayName ?? '',
+    );
   }
 
   @override
@@ -69,8 +136,28 @@ class FirebaseAuthService implements AuthService {
       id: currentUser.uid,
       displayName: currentUser.displayName ?? displayName.trim(),
       role: AppRole.player,
+      registrationApproved: false,
+      registrationStatus: 'notRequested',
+      joinRequestStatus: 'notRequested',
     );
-    await _profileRepository.createPlayerProfile(user: appUser, email: email);
+    try {
+      await _profileRepository.createPlayerProfile(
+        user: appUser,
+        email: email.trim(),
+      );
+    } on FirebaseException catch (error) {
+      try {
+        await _firebaseAuth.signOut();
+      } on FirebaseAuthException catch (signOutError) {
+        throw StateError(
+          'Your Authentication account was created, but its player profile '
+          'could not be saved and sign-out failed. '
+          '${_profileCreationFailure(error)} '
+          '${signOutError.message ?? signOutError.code}',
+        );
+      }
+      throw StateError(_profileCreationFailure(error));
+    }
 
     if (profilePhoto == null) {
       return appUser;
@@ -91,6 +178,9 @@ class FirebaseAuthService implements AuthService {
         displayName: appUser.displayName,
         role: appUser.role,
         photoUrl: photoUrl,
+        registrationApproved: appUser.registrationApproved,
+        registrationStatus: appUser.registrationStatus,
+        joinRequestStatus: appUser.joinRequestStatus,
       );
     } on FirebaseException catch (error) {
       try {
@@ -113,8 +203,9 @@ class FirebaseAuthService implements AuthService {
     if (error.plugin == 'firebase_storage') {
       return switch (error.code) {
         'object-not-found' =>
-          'Firebase Storage cannot find the uploaded photo. Verify that the '
-              'project bucket exists and matches the app configuration.',
+          'Firebase Storage cannot find this photo in the configured bucket. '
+              'Ask the project owner to confirm or create the bucket configured '
+              'for this app, then check Storage > Files for the uploaded photo.',
         'bucket-not-found' =>
           'the configured Firebase Storage bucket is not available.',
         'unauthorized' || 'unauthenticated' =>
@@ -149,30 +240,13 @@ class FirebaseAuthService implements AuthService {
   }
 
   @override
+  Future<void> recordActivity() async {
+    final user = _firebaseAuth.currentUser;
+    if (user != null) {
+      await _profileRepository.recordActivity(user.uid);
+    }
+  }
+
+  @override
   Future<void> signOut() => _firebaseAuth.signOut();
-
-  AppUser? _toAppUser(User? user) {
-    if (user == null) {
-      return null;
-    }
-
-    return AppUser(
-      id: user.uid,
-      displayName: user.displayName ?? user.email ?? 'MUKLadder player',
-      role: AppRole.player,
-      photoUrl: user.photoURL,
-    );
-  }
-
-  Future<AppUser?> _loadAppUser(User? user) async {
-    final basicUser = _toAppUser(user);
-    if (basicUser == null) {
-      return null;
-    }
-    try {
-      return await _profileRepository.getCurrentUser(basicUser.id);
-    } on StateError {
-      return basicUser;
-    }
-  }
 }
