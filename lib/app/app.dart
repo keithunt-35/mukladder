@@ -1,18 +1,26 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'app_brand.dart';
 import '../features/admin/application/admin_overview_provider.dart';
+import '../features/admin/application/admin_notification_providers.dart';
+import '../features/admin/application/admin_registration_providers.dart';
+import '../features/admin/domain/admin_player_points.dart';
+import '../features/admin/domain/pending_registration.dart';
 import '../features/auth/application/auth_providers.dart';
 import '../features/auth/domain/app_user.dart';
 import '../features/challenges/application/challenge_providers.dart';
 import '../features/challenges/domain/challenge.dart';
 import '../features/ladder/application/ranking_providers.dart';
 import '../features/ladder/domain/ranking_entry.dart';
+import '../features/membership/application/membership_providers.dart';
 import '../features/notifications/application/notification_providers.dart';
 import '../features/notifications/domain/notification.dart';
 import '../features/players/data/firebase_profile_photo_repository.dart';
@@ -21,13 +29,80 @@ import '../features/results/domain/match_result.dart';
 import '../features/results/domain/player_match_history_entry.dart';
 import '../features/players/presentation/player_avatar.dart';
 
-class MukladderApp extends StatelessWidget {
+class MukladderApp extends ConsumerStatefulWidget {
   const MukladderApp({super.key});
 
   @override
+  ConsumerState<MukladderApp> createState() => _MukladderAppState();
+}
+
+class _MukladderAppState extends ConsumerState<MukladderApp>
+    with WidgetsBindingObserver {
+  Timer? _activityTimer;
+  String? _activityUserId;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _startActivityTracking();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _startActivityTracking();
+    } else {
+      _activityTimer?.cancel();
+      _activityTimer = null;
+    }
+  }
+
+  void _startActivityTracking() {
+    _activityTimer?.cancel();
+    unawaited(_recordActivity());
+    _activityTimer = Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => unawaited(_recordActivity()),
+    );
+  }
+
+  Future<void> _recordActivity() async {
+    try {
+      await ref.read(authServiceProvider).recordActivity();
+    } on FirebaseException catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          context: ErrorDescription('while recording player activity'),
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _activityTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    ref.listen(authStateProvider, (_, next) {
+      next.whenData((user) {
+        if (user == null) {
+          _activityUserId = null;
+        } else if (_activityUserId != user.id) {
+          _activityUserId = user.id;
+          unawaited(_recordActivity());
+        }
+      });
+    });
     return MaterialApp.router(
       title: 'MUKLadder',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF0B5D3B),
@@ -95,13 +170,19 @@ final GoRouter _router = GoRouter(
   ],
 );
 
-class AppShell extends StatelessWidget {
+class AppShell extends ConsumerWidget {
   const AppShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final user = ref.watch(currentUserProvider);
+    if (user != null &&
+        user.role == AppRole.player &&
+        !user.registrationApproved) {
+      return const LadderScreen();
+    }
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: NavigationBar(
@@ -134,6 +215,198 @@ class AppShell extends StatelessWidget {
   }
 }
 
+class _MembershipCard extends ConsumerStatefulWidget {
+  const _MembershipCard({required this.user});
+
+  final AppUser user;
+
+  @override
+  ConsumerState<_MembershipCard> createState() => _MembershipCardState();
+}
+
+class _MembershipCardState extends ConsumerState<_MembershipCard> {
+  final _paymentReferenceController = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _paymentReferenceController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _requestMembership() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(membershipApplicationRepositoryProvider)
+          .requestToJoinLadder();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Membership request sent to the Admin.'),
+          ),
+        );
+      }
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) {
+        setState(() => _error = error.message ?? error.code);
+      }
+    } on FirebaseException catch (error) {
+      if (mounted) {
+        setState(() => _error = error.message ?? error.code);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _reportPayment() async {
+    final reference = _paymentReferenceController.text.trim();
+    if (!RegExp(r'^[A-Za-z0-9-]{4,80}$').hasMatch(reference)) {
+      setState(() {
+        _error = 'Enter a valid MTN MoMo transaction reference.';
+      });
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref
+          .read(membershipApplicationRepositoryProvider)
+          .reportPayment(transactionReference: reference);
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) {
+        setState(() => _error = error.message ?? error.code);
+      }
+    } on FirebaseException catch (error) {
+      if (mounted) {
+        setState(() => _error = error.message ?? error.code);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final requestStatus = widget.user.joinRequestStatus;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Icon(
+              requestStatus == 'paymentReported'
+                  ? Icons.hourglass_top_rounded
+                  : Icons.sports_tennis,
+              size: 44,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              switch (requestStatus) {
+                'paymentReported' => 'Payment submitted for verification',
+                'requested' => 'Complete your ladder membership',
+                _ => 'Join the MUKLadder',
+              },
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(switch (requestStatus) {
+              'paymentReported' =>
+                'Your payment reference '
+                    '${widget.user.paymentReference ?? 'was submitted'} '
+                    'has been sent to the Admin. They must verify the UGX '
+                    '40,000 payment before approving your place in the ladder.',
+              'requested' =>
+                'Your request has been sent to the Admin. The annual ladder '
+                    'fee is UGX 40,000. After paying using official instructions, '
+                    'submit the MTN MoMo transaction reference below.',
+              _ =>
+                'Request to join the ladder and pay the annual membership fee '
+                    'of UGX 40,000.',
+            }, textAlign: TextAlign.center),
+            if (requestStatus == 'notRequested') ...[
+              const SizedBox(height: 12),
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'MTN MoMo in-app payment is not configured yet. Tap Join '
+                    'Ladder to notify the Admin, then get the official payment '
+                    'instructions from them before sending money. The app will '
+                    'not charge you.',
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+            if (requestStatus == 'requested') ...[
+              const SizedBox(height: 20),
+              TextField(
+                controller: _paymentReferenceController,
+                enabled: !_busy,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  labelText: 'MTN MoMo transaction reference',
+                  helperText: 'Submit only after you have paid UGX 40,000.',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _busy ? null : _reportPayment,
+                icon: const Icon(Icons.receipt_long_outlined),
+                label: Text(
+                  _busy ? 'Submitting...' : 'I’ve paid — submit reference',
+                ),
+              ),
+            ] else if (requestStatus == 'notRequested') ...[
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: _busy ? null : _requestMembership,
+                icon: const Icon(Icons.group_add_outlined),
+                label: Text(_busy ? 'Sending request...' : 'Join Ladder'),
+              ),
+            ] else if (requestStatus == 'paymentReported') ...[
+              const SizedBox(height: 20),
+              const Card(
+                child: ListTile(
+                  leading: Icon(Icons.hourglass_top_rounded),
+                  title: Text('Awaiting Admin verification'),
+                  subtitle: Text(
+                    'You will be admitted to the ladder after the Admin '
+                    'verifies your payment.',
+                  ),
+                ),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class LadderScreen extends ConsumerWidget {
   const LadderScreen({super.key});
 
@@ -143,13 +416,19 @@ class LadderScreen extends ConsumerWidget {
     if (user == null) {
       return const _AuthenticationRequiredScreen();
     }
-    final ranking = ref.watch(rankingProvider);
-    final challenges = ref
-        .watch(challengesProvider)
-        .maybeWhen(data: (items) => items, orElse: () => const <Challenge>[]);
-    final results = ref
-        .watch(resultsProvider)
-        .maybeWhen(data: (items) => items, orElse: () => const <MatchResult>[]);
+    final isPendingPlayer =
+        user.role == AppRole.player && !user.registrationApproved;
+    final ranking = isPendingPlayer ? null : ref.watch(rankingProvider);
+    final challenges = isPendingPlayer
+        ? const <Challenge>[]
+        : ref
+              .watch(challengesProvider)
+              .maybeWhen(data: (items) => items, orElse: () => const []);
+    final results = isPendingPlayer
+        ? const <MatchResult>[]
+        : ref
+              .watch(resultsProvider)
+              .maybeWhen(data: (items) => items, orElse: () => const []);
     DateTime? cooldownStartedAt;
     for (final result in results) {
       if (result.status != ResultStatus.confirmed) {
@@ -175,48 +454,71 @@ class LadderScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         children: [
+          if (isPendingPlayer) ...[
+            Text(
+              'Player dashboard',
+              style: Theme.of(context).textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            _MembershipCard(user: user),
+            const SizedBox(height: 16),
+          ],
           _LadderHero(
             displayName: user.displayName,
-            playerPosition: ranking.maybeWhen(
+            playerPosition: ranking?.maybeWhen(
               data: (entries) => _positionOf(entries, user.id),
               orElse: () => null,
             ),
-            playerCount: ranking.maybeWhen(
+            playerCount: ranking?.maybeWhen(
               data: (entries) => entries.length,
               orElse: () => null,
             ),
           ),
           const SizedBox(height: 24),
-          Text(
-            'Current standings',
-            style: Theme.of(context).textTheme.titleLarge
-                ?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Standings follow the ranking feed configured for this tournament.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          const SizedBox(height: 12),
-          ranking.when(
-            loading: () => const Center(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: CircularProgressIndicator(),
+          if (isPendingPlayer) ...[
+            const Card(
+              child: ListTile(
+                leading: Icon(Icons.lock_outline),
+                title: Text('Member standings are for approved players'),
+                subtitle: Text(
+                  'The member list and ladder standings will be available '
+                  'after an Admin approves your registration.',
+                ),
               ),
             ),
-            error: (error, stackTrace) =>
-                _RankingError(onRetry: () => ref.invalidate(rankingProvider)),
-            data: (entries) => entries.isEmpty
-                ? const _EmptyRanking()
-                : _RankingList(
-                    entries: entries,
-                    currentUserId: user.id,
-                    cooldownStartedAt: cooldownStartedAt,
-                  ),
-          ),
+          ] else ...[
+            Text(
+              'Current standings',
+              style: Theme.of(context).textTheme.titleLarge
+                  ?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Standings follow the ranking feed configured for this tournament.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ranking!.when(
+              loading: () => const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+              error: (error, stackTrace) =>
+                  _RankingError(onRetry: () => ref.invalidate(rankingProvider)),
+              data: (entries) => entries.isEmpty
+                  ? const _EmptyRanking()
+                  : _RankingList(
+                      entries: entries,
+                      currentUserId: user.id,
+                      cooldownStartedAt: cooldownStartedAt,
+                    ),
+            ),
+          ],
         ],
       ),
     );
@@ -273,7 +575,9 @@ class _RankingList extends StatelessWidget {
                 style: const TextStyle(fontWeight: FontWeight.w700),
               ),
               subtitle: Text(
-                'Last active ${_formatDate(entry.player.lastActivityAt)}',
+                entry.player.lastActivityAt == null
+                    ? 'No recorded activity'
+                    : 'Last active ${_formatDate(entry.player.lastActivityAt!)}',
               ),
               trailing: canChallenge
                   ? PopupMenuButton<String>(
@@ -453,7 +757,10 @@ class _RankingList extends StatelessWidget {
   }
 
   String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
+    final local = date.toLocal();
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '${local.day}/${local.month}/${local.year} at $hour:$minute';
   }
 }
 
@@ -655,12 +962,22 @@ class _RankingError extends StatelessWidget {
 }
 
 String _profilePhotoError(FirebaseException error) {
+  if (error.plugin == 'cloud_firestore') {
+    if (error.code == 'permission-denied') {
+      return 'Firebase Authentication may have created your account, but '
+          'Firestore blocked saving the player profile. Publish the current '
+          'firestore.rules to project mukladder-4351c, then sign in again to '
+          'finish setup.';
+    }
+    return 'Firestore could not save the account profile '
+        '(${error.code}: ${error.message ?? 'no additional details'}).';
+  }
   if (error.plugin == 'firebase_storage') {
     return switch (error.code) {
       'object-not-found' =>
-        'The upload finished, but Firebase Storage cannot find the photo. '
-            'Check that the project Storage bucket is enabled and matches '
-            'the app configuration.',
+        'Firebase Storage cannot find this photo in the configured bucket. '
+            'Ask the project owner to confirm or create the bucket configured '
+            'for this app, then check Storage > Files for the uploaded photo.',
       'bucket-not-found' =>
         'The Firebase Storage bucket is not available. Ask the project '
             'owner to enable the configured bucket.',
@@ -874,10 +1191,6 @@ class _ProfilePhotoEditorState extends ConsumerState<_ProfilePhotoEditor> {
       if (mounted) {
         setState(() => _error = 'Could not open the photo gallery.');
       }
-    } on FirebaseException catch (error) {
-      if (mounted) {
-        setState(() => _error = _profilePhotoError(error));
-      }
     } on StateError catch (error) {
       if (mounted) {
         setState(() => _error = error.message);
@@ -947,6 +1260,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _passwordController = TextEditingController();
   final _displayNameController = TextEditingController();
   bool _registering = false;
+  AppRole _signInRole = AppRole.player;
   bool _busy = false;
   String? _error;
   Uint8List? _selectedProfilePhoto;
@@ -1025,12 +1339,29 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           profilePhoto: _selectedProfilePhoto,
         );
         ref.invalidate(authStateProvider);
+        if (mounted) {
+          context.go('/ladder');
+        }
       } else {
-        await service.signIn(email: email, password: password);
+        final user = await service.signIn(email: email, password: password);
+        if (user.role != _signInRole) {
+          await service.signOut();
+          throw StateError(
+            'This account is registered as ${user.role.label}. '
+            'Choose ${user.role.label} sign-in and try again.',
+          );
+        }
+        if (mounted) {
+          context.go(switch (user.role) {
+            AppRole.admin => '/admin',
+            AppRole.treasurer => '/treasurer',
+            AppRole.player => '/ladder',
+          });
+        }
       }
     } on FirebaseAuthException catch (error) {
       if (mounted) {
-        setState(() => _error = _authErrorMessage(error.code));
+        setState(() => _error = _authErrorMessage(error));
       }
     } on FirebaseException catch (error) {
       if (mounted) {
@@ -1051,15 +1382,47 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
-  String _authErrorMessage(String code) => switch (code) {
-    'email-already-in-use' => 'That email is already registered.',
-    'invalid-credential' ||
-    'wrong-password' ||
-    'user-not-found' => 'The email or password is incorrect.',
-    'weak-password' => 'Choose a stronger password.',
-    'invalid-email' => 'Enter a valid email address.',
-    _ => 'Authentication failed. Please try again.',
-  };
+  String _authErrorMessage(FirebaseAuthException error) {
+    final backendConfigurationMissing =
+        error.message?.toUpperCase().contains('CONFIGURATION_NOT_FOUND') ??
+        false;
+    if (error.code == 'configuration-not-found' ||
+        backendConfigurationMissing) {
+      return 'Firebase Authentication is not fully configured for project '
+          'mukladder-4351c. In Firebase Console open Authentication, finish '
+          'setting it up, then enable Email/Password under Sign-in method. '
+          'Confirm the Android app is registered in this same project.';
+    }
+
+    return switch (error.code) {
+      'email-already-in-use' =>
+        'That email already has an Authentication account. Sign in instead. '
+            'If its player profile was not saved earlier, signing in will retry '
+            'the profile setup.',
+      'invalid-credential' ||
+      'wrong-password' ||
+      'user-not-found' => 'The email or password is incorrect.',
+      'weak-password' => 'Choose a stronger password (at least 6 characters).',
+      'invalid-email' => 'Enter a valid email address.',
+      'operation-not-allowed' =>
+        'Email/Password sign-up is not enabled for Firebase project '
+            'mukladder-4351c. In Firebase Console open Authentication > '
+            'Sign-in method and enable Email/Password.',
+      'network-request-failed' =>
+        'Firebase could not reach the network. Check the tablet’s internet '
+            'connection and try again.',
+      'too-many-requests' =>
+        'Firebase temporarily blocked requests from this device. Wait a few '
+            'minutes and try again.',
+      'app-not-authorized' || 'invalid-api-key' =>
+        'This Android app is not authorized by the Firebase project. Verify '
+            'the registered Android package and API key configuration.',
+      _ =>
+        'Firebase Authentication failed (${error.code}). '
+            '${error.message ?? 'Check Authentication > Sign-in method and '
+                    'the Firebase project configuration, then try again.'}',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1086,6 +1449,36 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             ),
           ),
           const SizedBox(height: 28),
+          if (!_registering) ...[
+            SegmentedButton<AppRole>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: AppRole.player, label: Text('Player')),
+                ButtonSegment(value: AppRole.admin, label: Text('Admin')),
+                ButtonSegment(
+                  value: AppRole.treasurer,
+                  label: Text('Treasurer'),
+                ),
+              ],
+              selected: {_signInRole},
+              onSelectionChanged: _busy
+                  ? null
+                  : (selection) {
+                      setState(() {
+                        _signInRole = selection.single;
+                        _error = null;
+                      });
+                    },
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Admin and Treasurer access must be assigned by the project '
+              'owner. The selected role is checked after sign-in.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 16),
+          ],
           if (_registering) ...[
             Center(
               child: Column(
@@ -1149,6 +1542,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 ? null
                 : () => setState(() {
                     _registering = !_registering;
+                    _signInRole = AppRole.player;
                     _error = null;
                   }),
             child: Text(
@@ -1320,6 +1714,10 @@ class AdminScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 20),
+            const _AdminMembershipAlerts(),
+            const SizedBox(height: 12),
+            const _PendingRegistrationQueue(),
+            const SizedBox(height: 12),
             _AdminSummaryCard(
               title: 'Active players',
               subtitle: '${data.totalPlayers} registered players',
@@ -1345,15 +1743,17 @@ class AdminScreen extends ConsumerWidget {
               value: '${data.auditEvents}',
             ),
             const SizedBox(height: 12),
+            const _AdminPlayerPointsSection(),
+            const SizedBox(height: 12),
             Card(
               color: Theme.of(context).colorScheme.secondaryContainer,
               child: const ListTile(
                 leading: Icon(Icons.lock_outline),
-                title: Text('Administrative actions are read-only'),
+                title: Text('Ladder positions remain protected'),
                 subtitle: Text(
-                  'Approvals, result decisions, and ranking changes need a '
-                  'trusted, audited backend workflow before they can be '
-                  'enabled here.',
+                  'Manual points are tracked separately and do not change '
+                  'ladder positions. Match-result ranking decisions still '
+                  'require confirmed rules and trusted backend workflows.',
                 ),
               ),
             ),
@@ -1361,6 +1761,447 @@ class AdminScreen extends ConsumerWidget {
         ),
       ),
     );
+  }
+}
+
+class _AdminMembershipAlerts extends ConsumerWidget {
+  const _AdminMembershipAlerts();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifications = ref.watch(adminNotificationsProvider);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Membership alerts',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            notifications.when(
+              loading: () => const LinearProgressIndicator(),
+              error: (error, _) => const Text(
+                'Unable to load Admin alerts. Refresh to try again.',
+              ),
+              data: (items) {
+                if (items.isEmpty) {
+                  return const ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.notifications_none),
+                    title: Text('No new membership alerts'),
+                  );
+                }
+                return Column(
+                  children: items
+                      .map(
+                        (item) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.notifications_active),
+                          title: Text(item.title),
+                          subtitle: Text(item.body),
+                          isThreeLine: true,
+                        ),
+                      )
+                      .toList(growable: false),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PendingRegistrationQueue extends ConsumerWidget {
+  const _PendingRegistrationQueue();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pending = ref.watch(pendingRegistrationsProvider);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Pending registrations',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Verify the UGX 40,000 payment, then assign an initial position.',
+            ),
+            const SizedBox(height: 8),
+            pending.when(
+              loading: () => const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+              error: (error, _) => Column(
+                children: [
+                  const Text('Unable to load pending registrations.'),
+                  TextButton(
+                    onPressed: () =>
+                        ref.invalidate(pendingRegistrationsProvider),
+                    child: const Text('Try again'),
+                  ),
+                ],
+              ),
+              data: (registrations) {
+                if (registrations.isEmpty) {
+                  return const ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.check_circle_outline),
+                    title: Text('No pending registrations'),
+                  );
+                }
+                return Column(
+                  children: registrations
+                      .map(
+                        (registration) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: PlayerAvatar(
+                            displayName: registration.displayName,
+                            photoUrl: registration.photoUrl,
+                            radius: 22,
+                          ),
+                          title: Text(registration.displayName),
+                          subtitle: Text(
+                            [
+                              if (registration.email.isNotEmpty)
+                                registration.email,
+                              if (registration.paymentReported)
+                                'Payment reference: '
+                                    '${registration.paymentReference ?? 'not available'} '
+                                    '(verify in MTN MoMo)',
+                              if (!registration.paymentReported)
+                                'Request received; awaiting payment report',
+                            ].join('\n'),
+                          ),
+                          isThreeLine: true,
+                          trailing: registration.paymentReported
+                              ? FilledButton(
+                                  onPressed: () => _approveRegistration(
+                                    context,
+                                    ref,
+                                    registration,
+                                  ),
+                                  child: const Text('Review'),
+                                )
+                              : const Chip(label: Text('Awaiting payment')),
+                        ),
+                      )
+                      .toList(growable: false),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _approveRegistration(
+    BuildContext context,
+    WidgetRef ref,
+    PendingRegistration registration,
+  ) async {
+    try {
+      final repository = ref.read(adminRegistrationRepositoryProvider);
+      final suggestedPosition = await repository.suggestedPosition();
+      if (!context.mounted) {
+        return;
+      }
+      final controller = TextEditingController(
+        text: suggestedPosition.toString(),
+      );
+      final initialPosition = await showDialog<int>(
+        context: context,
+        builder: (dialogContext) {
+          var paymentVerified = false;
+          return StatefulBuilder(
+            builder: (context, setDialogState) => AlertDialog(
+              title: const Text('Verify payment and assign position'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Confirm that ${registration.displayName} paid '
+                    'UGX ${PendingRegistration.membershipFeeDisplay}. '
+                    'Verify reference ${registration.paymentReference ?? 'not available'} '
+                    'in MTN MoMo before approving. '
+                    'The ladder currently has positions 1 to '
+                    '${suggestedPosition - 1}.',
+                  ),
+                  const SizedBox(height: 8),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: paymentVerified,
+                    onChanged: (value) {
+                      setDialogState(() => paymentVerified = value ?? false);
+                    },
+                    title: const Text('I verified this payment externally'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: InputDecoration(
+                      labelText: 'Initial position',
+                      helperText: 'Choose 1 to $suggestedPosition',
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: paymentVerified
+                      ? () {
+                          final value = int.tryParse(controller.text);
+                          if (value != null &&
+                              value > 0 &&
+                              value <= suggestedPosition) {
+                            Navigator.pop(dialogContext, value);
+                          }
+                        }
+                      : null,
+                  child: const Text('Verify payment & approve'),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+      controller.dispose();
+      if (initialPosition == null || !context.mounted) {
+        return;
+      }
+      await repository.approveRegistration(
+        userId: registration.userId,
+        initialPosition: initialPosition,
+        paymentVerified: true,
+      );
+      ref.invalidate(adminOverviewProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${registration.displayName} approved at position '
+              '$initialPosition.',
+            ),
+          ),
+        );
+      }
+    } on FirebaseFunctionsException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message ?? error.code)));
+      }
+    } on FirebaseException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message ?? error.code)));
+      }
+    } on StateError catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } on ArgumentError catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message?.toString() ?? 'Invalid input')),
+        );
+      }
+    }
+  }
+}
+
+class _AdminPlayerPointsSection extends ConsumerWidget {
+  const _AdminPlayerPointsSection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final points = ref.watch(adminPlayerPointsProvider);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Player points',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'View every player’s total or add an audited points adjustment.',
+            ),
+            const SizedBox(height: 8),
+            points.when(
+              loading: () => const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: CircularProgressIndicator(),
+                ),
+              ),
+              error: (error, _) => Column(
+                children: [
+                  const Text('Unable to load player points.'),
+                  TextButton(
+                    onPressed: () => ref.invalidate(adminPlayerPointsProvider),
+                    child: const Text('Try again'),
+                  ),
+                ],
+              ),
+              data: (players) => players.isEmpty
+                  ? const ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text('No players found'),
+                    )
+                  : Column(
+                      children: players
+                          .map((player) {
+                            return ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(player.displayName),
+                              subtitle: player.canReceivePoints
+                                  ? null
+                                  : const Text('Pending approval or inactive'),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '${player.totalPoints} pts',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  TextButton(
+                                    onPressed: player.canReceivePoints
+                                        ? () => _addPoints(context, ref, player)
+                                        : null,
+                                    child: const Text('Add points'),
+                                  ),
+                                ],
+                              ),
+                            );
+                          })
+                          .toList(growable: false),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addPoints(
+    BuildContext context,
+    WidgetRef ref,
+    AdminPlayerPoints player,
+  ) async {
+    final pointsController = TextEditingController();
+    final reasonController = TextEditingController();
+    final adjustment = await showDialog<(int, String)>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Add points to ${player.displayName}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: pointsController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                labelText: 'Points to add',
+                helperText: 'Use a positive whole number.',
+              ),
+            ),
+            TextField(
+              controller: reasonController,
+              maxLength: 300,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Reason',
+                helperText: 'Required for the audit history.',
+              ),
+            ),
+            const Text(
+              'This changes the points total only, not the ladder position.',
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final amount = int.tryParse(pointsController.text);
+              final reason = reasonController.text.trim();
+              if (amount != null && amount > 0 && reason.isNotEmpty) {
+                Navigator.pop(dialogContext, (amount, reason));
+              }
+            },
+            child: const Text('Add points'),
+          ),
+        ],
+      ),
+    );
+    pointsController.dispose();
+    reasonController.dispose();
+    if (adjustment == null || !context.mounted) {
+      return;
+    }
+
+    try {
+      await ref
+          .read(adminPointsRepositoryProvider)
+          .addPoints(
+            playerId: player.playerId,
+            points: adjustment.$1,
+            reason: adjustment.$2,
+          );
+      ref.invalidate(adminPlayerPointsProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Points added to ${player.displayName}.')),
+        );
+      }
+    } on FirebaseFunctionsException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message ?? error.code)));
+      }
+    } on FirebaseException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message ?? error.code)));
+      }
+    } on StateError catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    }
   }
 }
 

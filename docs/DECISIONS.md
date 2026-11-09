@@ -80,3 +80,79 @@ Decisions are recorded here before they become hidden assumptions. Statuses:
   project. Existing seeded roster entries need a verified Auth UID link before
   their account photo can appear in the ladder. Firebase plan or billing
   requirements must be checked by the project owner.
+
+## ADR-007 — Admin-verified registration and initial position
+
+- **Date:** 2026-11-05
+- **Status:** Implemented as a Callable Function; Emulator Suite validation
+  and deployment pending
+- **Problem:** New accounts must not join the active ladder until the
+  UGX 40,000 fee is received and an authorized Admin accepts them.
+- **Decision:** Keep player signups pending. A Firebase Callable Function
+  verifies the caller's Admin role, records the Admin's manual payment
+  confirmation and selected initial position in one audited Firestore
+  transaction. The transaction shifts later positions and rejects gaps or
+  duplicate positions. Client Firestore rules continue to deny ranking writes.
+- **Reason:** The paper describes payment as a status flag, excludes a payment
+  gateway from the MVP, and the user confirmed that initial positions are
+  assigned manually by the Admin.
+- **Trade-offs:** Admin approval is only available after the function and
+  Firestore Rules are Emulator-tested and deployed. This workflow does not
+  implement ranking changes from match results or validate payment evidence.
+
+## ADR-008 — Server-timestamped app activity
+
+- **Date:** 2026-11-05
+- **Status:** Implemented in app; rules deployment pending
+- **Problem:** Ladder activity timestamps must represent actual app use rather
+  than seeded or hardcoded dates.
+- **Decision:** Write `lastActivityAt` with Firestore server timestamps on
+  sign-in, app resume and every five minutes while foregrounded; render missing
+  values as no recorded activity.
+- **Reason:** Server time avoids relying on user-device clocks, and the
+  heartbeat keeps active sessions current.
+- **Trade-offs:** Each signed-in foreground session writes at a five-minute
+  interval; actual updates require the revised rules to be deployed.
+
+## ADR-009 — Explicit role selection and audited manual player points
+
+- **Date:** 2026-11-05
+- **Status:** Implemented in app and Functions; deployment pending
+- **Problem:** Let users choose the intended sign-in role and let Admins
+  inspect player point totals and award points without inventing match-scoring
+  or ranking rules.
+- **Decision:** Show Player, Admin and Treasurer sign-in modes, then compare
+  the selection with the role loaded from the trusted user profile. A mismatch
+  signs out and is rejected; selecting Admin never grants that role. Admins
+  can add positive whole-number points with a required reason. The backend
+  records each adjustment transactionally in a total, immutable event and
+  audit record. Point totals do not automatically change ladder positions.
+- **Reason:** The existing project has no approved point-scoring formula and
+  explicitly protects ranking changes from client writes.
+- **Trade-offs:** Deploy `addPlayerPoints` and the updated Firestore Rules
+  before using these dashboard features. Awarding points from match results
+  requires separate confirmation of official scoring rules.
+
+## ADR-010 — MTN MoMo external payment report and Admin verification
+
+- **Date:** 2026-11-06
+- **Status:** Implemented as a pending-membership workflow; deployment and
+  merchant integration pending
+- **Problem:** Let a new player request to join, notify Admins, and report a
+  UGX 40,000 subscription payment without claiming an unverified payment is
+  confirmed.
+- **Decision:** Signup creates a non-member account with no join request.
+  `requestToJoinLadder` sends persistent in-app notifications to Admins.
+  Because no MTN MoMo merchant account is configured, the app does not take a
+  payment; the player must obtain official payment instructions externally
+  and submit a transaction reference. `reportLadderPayment` notifies Admins,
+  but marks payment only as reported. An Admin must verify the transaction
+  externally, confirm that verification, assign a position, and approve via
+  the existing trusted transaction. Only then is membership activated.
+- **Reason:** The payment provider was selected as MTN MoMo, but the user
+  confirmed the merchant account is not ready. A reference submitted by a
+  player is not proof of settlement.
+- **Trade-offs:** Alerts are persisted and live in the Admin dashboard; FCM
+  push delivery and actual MTN MoMo collection/callback verification are not
+  part of this phase. Deploy the new callable functions and Firestore Rules
+  before using the workflow.

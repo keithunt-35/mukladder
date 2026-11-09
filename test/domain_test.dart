@@ -26,6 +26,12 @@ void main() {
       expect(entry.position, 1);
     });
 
+    test('allows a player with no recorded app activity yet', () {
+      final newPlayer = Player(id: 'new-player', displayName: 'New Player');
+
+      expect(newPlayer.lastActivityAt, isNull);
+    });
+
     test('allows valid challenge transitions', () {
       final challenge = Challenge(
         id: 'challenge-1',

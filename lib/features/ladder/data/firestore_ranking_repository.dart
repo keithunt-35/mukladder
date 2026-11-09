@@ -95,12 +95,15 @@ class FirestoreRankingRepository implements RankingRepository {
             player['displayName'] as String,
         photoUrl:
             playerData['photoUrl'] as String? ?? player['photoUrl'] as String?,
-        lastActivityAt:
-            _dateFrom(playerData['lastActivityAt']) ??
-            _dateFrom(player['lastActivityAt']) ??
-            DateTime.fromMillisecondsSinceEpoch(0),
-        paymentStatus: PaymentStatus.unknown,
-        active: player['active'] as bool? ?? true,
+        lastActivityAt: _dateFrom(playerData['lastActivityAt']),
+        paymentStatus: switch (playerData['paymentStatus']) {
+          'pending' => PaymentStatus.pending,
+          'paid' => PaymentStatus.paid,
+          'overdue' => PaymentStatus.overdue,
+          _ => PaymentStatus.unknown,
+        },
+        active:
+            playerData['active'] as bool? ?? player['active'] as bool? ?? true,
       ),
     );
   }

@@ -53,10 +53,10 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDUl2PqgtXD0XIRJkf8uR5TDclZikrpcMg',
-    appId: '1:1012285344056:android:b765815f6fc9b09e4d59cd',
-    messagingSenderId: '1012285344056',
-    projectId: 'mukladder',
-    storageBucket: 'mukladder.firebasestorage.app',
+    apiKey: 'AIzaSyDYFr3JPGq70enONCz6-6k_St4V6JsH2H4',
+    appId: '1:839117866563:android:6377746785834e600136f6',
+    messagingSenderId: '839117866563',
+    projectId: 'mukladder-4351c',
+    storageBucket: 'mukladder-4351c.firebasestorage.app',
   );
 }

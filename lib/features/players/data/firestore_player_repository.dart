@@ -21,9 +21,7 @@ class FirestorePlayerRepository implements PlayerRepository {
       id: document.id,
       displayName: data['displayName'] as String,
       photoUrl: data['photoUrl'] as String?,
-      lastActivityAt:
-          _dateFrom(data['lastActivityAt']) ??
-          DateTime.fromMillisecondsSinceEpoch(0),
+      lastActivityAt: _dateFrom(data['lastActivityAt']),
       paymentStatus: switch (data['paymentStatus']) {
         'pending' => PaymentStatus.pending,
         'paid' => PaymentStatus.paid,
