@@ -170,19 +170,13 @@ final GoRouter _router = GoRouter(
   ],
 );
 
-class AppShell extends ConsumerWidget {
+class AppShell extends StatelessWidget {
   const AppShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentUserProvider);
-    if (user != null &&
-        user.role == AppRole.player &&
-        !user.registrationApproved) {
-      return const LadderScreen();
-    }
+  Widget build(BuildContext context) {
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: NavigationBar(
