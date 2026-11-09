@@ -8,8 +8,11 @@ final challengeRepositoryProvider = Provider<ChallengeRepository>((ref) {
   return FirestoreChallengeRepository();
 });
 
-final challengesProvider = FutureProvider<List<Challenge>>((ref) {
-  return ref.watch(challengeRepositoryProvider).getChallenges();
+/// Real-time stream of all challenges involving the signed-in user.
+/// Using StreamProvider ensures the UI auto-refreshes when another player
+/// acts (accepts, rejects, submits a result) without needing manual invalidate.
+final challengesProvider = StreamProvider<List<Challenge>>((ref) {
+  return ref.watch(challengeRepositoryProvider).watchChallenges();
 });
 
 final challengeCreationProvider =

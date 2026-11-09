@@ -9,5 +9,10 @@ final rankingRepositoryProvider = Provider<RankingRepository>((ref) {
 });
 
 final rankingProvider = StreamProvider<List<RankingEntry>>((ref) {
+  // All authenticated users — including those with pending membership — use
+  // the same Firestore ranking stream.  The public ladder callable
+  // (getPublicLadder) is kept for future use but is not required for the
+  // in-app experience; Firestore Security Rules control what data each role
+  // can read at the database level.
   return ref.watch(rankingRepositoryProvider).watchRanking();
 });

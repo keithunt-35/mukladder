@@ -113,6 +113,7 @@ class FirebaseAuthService implements AuthService {
     required String email,
     required String password,
     required String displayName,
+    AppRole role = AppRole.player,
     Uint8List? profilePhoto,
   }) async {
     if (profilePhoto != null &&
@@ -135,9 +136,9 @@ class FirebaseAuthService implements AuthService {
     final appUser = AppUser(
       id: currentUser.uid,
       displayName: currentUser.displayName ?? displayName.trim(),
-      role: AppRole.player,
-      registrationApproved: false,
-      registrationStatus: 'notRequested',
+      role: role,
+      registrationApproved: role == AppRole.player ? false : true,
+      registrationStatus: role == AppRole.player ? 'notRequested' : 'approved',
       joinRequestStatus: 'notRequested',
     );
     try {
@@ -183,18 +184,12 @@ class FirebaseAuthService implements AuthService {
         joinRequestStatus: appUser.joinRequestStatus,
       );
     } on FirebaseException catch (error) {
-      try {
-        await _firebaseAuth.signOut();
-      } on FirebaseAuthException catch (signOutError) {
-        throw StateError(
-          'Your account was created, but the profile photo could not be '
-          'saved and sign-out failed. Sign in and retry from your profile. '
-          '${signOutError.message ?? signOutError.code}',
-        );
-      }
+      // Account + profile created successfully; photo upload failed.
+      // Do NOT sign out — the account is valid.  Report so the user
+      // can retry from the Profile screen.
       throw StateError(
         'Your account was created, but ${_profilePhotoFailure(error)} '
-        'Sign in and retry from your profile.',
+        'Sign in and retry uploading your photo from the Profile screen.',
       );
     }
   }

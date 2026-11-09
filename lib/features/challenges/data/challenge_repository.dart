@@ -3,6 +3,9 @@ import '../domain/challenge.dart';
 abstract interface class ChallengeRepository {
   Future<List<Challenge>> getChallenges();
 
+  /// Real-time stream of all challenges involving the signed-in user.
+  Stream<List<Challenge>> watchChallenges();
+
   Future<Challenge> getChallenge(String challengeId);
 
   Future<Challenge> createNormalChallenge({

@@ -13,6 +13,12 @@ class InMemoryChallengeRepository implements ChallengeRepository {
     return List.unmodifiable(_challenges);
   }
 
+  /// In-memory stream: emits the current list once and completes.
+  @override
+  Stream<List<Challenge>> watchChallenges() {
+    return Stream.value(List.unmodifiable(_challenges));
+  }
+
   @override
   Future<Challenge> getChallenge(String challengeId) async {
     return _challenges.firstWhere(

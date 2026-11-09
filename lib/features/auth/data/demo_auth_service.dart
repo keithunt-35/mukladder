@@ -28,11 +28,12 @@ class DemoAuthService implements AuthService {
     required String email,
     required String password,
     required String displayName,
+    AppRole role = AppRole.player,
     Uint8List? profilePhoto,
   }) async => AppUser(
     id: 'demo-player-1',
     displayName: displayName,
-    role: AppRole.player,
+    role: role,
   );
 
   @override

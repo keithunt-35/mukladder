@@ -14,15 +14,20 @@ class UserProfileRepository {
   }) async {
     final userReference = _firestore.collection('users').doc(user.id);
     final playerReference = _firestore.collection('players').doc(user.id);
+    final roleString = switch (user.role) {
+      AppRole.admin => 'admin',
+      AppRole.treasurer => 'treasurer',
+      AppRole.player => 'player',
+    };
     final batch = _firestore.batch()
       ..set(userReference, {
         'uid': user.id,
         'displayName': user.displayName,
         'email': email,
-        'role': 'player',
+        'role': roleString,
         'status': 'active',
-        'registrationStatus': 'notRequested',
-        'joinRequestStatus': 'notRequested',
+        'registrationStatus': user.registrationStatus,
+        'joinRequestStatus': user.joinRequestStatus,
         'paymentStatus': 'pending',
         'photoUrl': user.photoUrl,
         'photoStoragePath': user.photoUrl == null
@@ -38,8 +43,8 @@ class UserProfileRepository {
         'photoStoragePath': user.photoUrl == null
             ? null
             : 'profilePhotos/${user.id}/profile.jpg',
-        'registrationStatus': 'notRequested',
-        'joinRequestStatus': 'notRequested',
+        'registrationStatus': user.registrationStatus,
+        'joinRequestStatus': user.joinRequestStatus,
         'paymentStatus': 'pending',
         'active': false,
         'createdAt': FieldValue.serverTimestamp(),

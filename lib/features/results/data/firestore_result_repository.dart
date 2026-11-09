@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -35,6 +37,64 @@ class FirestoreResultRepository implements ResultRepository {
       }
     }
     return documents.values.map(_fromDocument).toList(growable: false);
+  }
+
+  /// Real-time stream of results.  Listens to the challenges stream and re-fans
+  /// out individual result snapshots whenever the challenge list changes.
+  @override
+  Stream<List<MatchResult>> watchResults() {
+    final controller = StreamController<List<MatchResult>>();
+    StreamSubscription<List<dynamic>>? challengeSub;
+    final Map<String, StreamSubscription<QuerySnapshot<Map<String, dynamic>>>>
+    resultSubs = {};
+    final Map<String, List<MatchResult>> resultsByChallenge = {};
+
+    void emitAll() {
+      final all = <MatchResult>[];
+      for (final results in resultsByChallenge.values) {
+        all.addAll(results);
+      }
+      controller.add(List.unmodifiable(all));
+    }
+
+    controller.onListen = () {
+      challengeSub = challengeRepository.watchChallenges().listen(
+        (challenges) {
+          final currentIds = challenges.map((c) => c.id).toSet();
+          // Cancel subscriptions for challenges no longer relevant.
+          final stale = resultSubs.keys
+              .where((id) => !currentIds.contains(id))
+              .toList();
+          for (final id in stale) {
+            resultSubs.remove(id)?.cancel();
+            resultsByChallenge.remove(id);
+          }
+          // Add subscriptions for new challenges.
+          for (final challenge in challenges) {
+            if (resultSubs.containsKey(challenge.id)) continue;
+            resultSubs[challenge.id] = _firestore
+                .collection('results')
+                .where('challengeId', isEqualTo: challenge.id)
+                .snapshots()
+                .listen((snap) {
+                  resultsByChallenge[challenge.id] = snap.docs
+                      .map(_fromDocument)
+                      .toList(growable: false);
+                  emitAll();
+                }, onError: controller.addError);
+          }
+        },
+        onError: controller.addError,
+      );
+    };
+    controller.onCancel = () async {
+      await challengeSub?.cancel();
+      for (final sub in resultSubs.values) {
+        await sub.cancel();
+      }
+    };
+
+    return controller.stream;
   }
 
   @override

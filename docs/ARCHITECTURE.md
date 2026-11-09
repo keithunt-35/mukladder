@@ -86,12 +86,14 @@ their Auth UID (`userId`) before their uploaded photo is associated with that
 ranking entry.
 
 Player signups use a pending-registration status and open the player dashboard
-immediately. Pending players can request membership and report payment there;
-the member directory, rankings and other player features remain restricted
-until an Admin approves registration. The profile stream reflects approval
-immediately after the Cloud Function updates the user document. Admin and
-Treasurer roles remain owner-assigned in Firebase; the client does not accept a
-shared role-granting key.
+immediately. Pending players can request membership, report payment, and view
+the member list and ladder standings there. The authenticated `getPublicLadder`
+callable returns only public ranking/profile fields and never returns private
+payment or account data. Challenges and other member-only operations remain
+restricted until an Admin approves registration. The profile stream reflects
+approval immediately after the Cloud Function updates the user document.
+Admin and Treasurer roles remain owner-assigned in Firebase; the client does
+not accept a shared role-granting key.
 Each first join request creates a persistent in-app notification for every
 configured Admin, containing the player's identity and a prompt to review the
 request in the Admin workspace. Duplicate requests do not create duplicate

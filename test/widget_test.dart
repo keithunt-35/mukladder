@@ -63,23 +63,53 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Player dashboard'), findsOneWidget);
+    // The hero is below the membership card — scroll it into view first.
+    await tester.scrollUntilVisible(
+      find.text('MAKERERE UNIVERSITY'),
+      100,
+      scrollable: find.descendant(
+        of: find.byType(LadderScreen),
+        matching: find.byType(Scrollable),
+      ),
+    );
     expect(find.text('MAKERERE UNIVERSITY'), findsOneWidget);
     expect(find.text('Join the MUKLadder'), findsOneWidget);
     expect(find.text('Join Ladder'), findsOneWidget);
     await tester.scrollUntilVisible(
-      find.text('Member standings are for approved players'),
+      find.text('Current standings'),
       300,
       scrollable: find.descendant(
         of: find.byType(LadderScreen),
         matching: find.byType(Scrollable),
       ),
     );
+    expect(find.text('Current standings'), findsOneWidget);
+    expect(find.text('Opponent'), findsOneWidget);
     expect(
       find.text('Member standings are for approved players'),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text('Current standings'), findsNothing);
-    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byType(NavigationBar), findsOneWidget);
+  });
+
+  testWidgets('pending players can view standings but cannot challenge', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_testApp(registrationApproved: false));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Opponent'),
+      300,
+      scrollable: find.descendant(
+        of: find.byType(LadderScreen),
+        matching: find.byType(Scrollable),
+      ),
+    );
+
+    expect(find.text('Current standings'), findsOneWidget);
+    expect(find.text('Challenges available after approval'), findsWidgets);
+    expect(find.byTooltip('Challenge Opponent'), findsNothing);
   });
 
   testWidgets('player can request to join and report an external payment', (
@@ -118,6 +148,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('I’ve paid — submit reference'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('I’ve paid — submit reference'));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'MTN-123456');
     await tester.tap(find.text('I’ve paid — submit reference'));
     await tester.pumpAndSettle();
@@ -549,7 +581,10 @@ void main() {
       scrollable: adminScrollable,
     );
     expect(find.text('New ladder membership request'), findsOneWidget);
-    expect(find.textContaining('Review this player in the Admin workspace'), findsOneWidget);
+    expect(
+      find.textContaining('Review this player in the Admin workspace'),
+      findsOneWidget,
+    );
     expect(find.text('Pending registrations'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('New Member'),
@@ -777,13 +812,14 @@ class _SuccessfulRegistrationAuthService extends DemoAuthService {
     required String email,
     required String password,
     required String displayName,
+    AppRole role = AppRole.player,
     Uint8List? profilePhoto,
   }) async {
     registerCalls++;
     return AppUser(
       id: 'new-player',
       displayName: displayName,
-      role: AppRole.player,
+      role: role,
       registrationApproved: false,
       registrationStatus: 'notRequested',
       joinRequestStatus: 'notRequested',
@@ -813,6 +849,7 @@ class _FailingSignupAuthService extends DemoAuthService {
     required String email,
     required String password,
     required String displayName,
+    AppRole role = AppRole.player,
     Uint8List? profilePhoto,
   }) async {
     throw failure;

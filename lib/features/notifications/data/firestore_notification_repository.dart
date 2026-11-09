@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../domain/notification.dart';
@@ -24,6 +26,24 @@ class FirestoreNotificationRepository implements NotificationRepository {
       state: NotificationSyncState.synchronized,
       lastSyncedAt: DateTime.now(),
     );
+  }
+
+  /// Real-time stream of the notification snapshot for this recipient.
+  Stream<NotificationSnapshot> watchSnapshot() {
+    return _firestore
+        .collection('notifications')
+        .where('recipientId', isEqualTo: recipientId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => NotificationSnapshot(
+            notifications: snapshot.docs
+                .map(_fromDocument)
+                .toList(growable: false),
+            state: NotificationSyncState.synchronized,
+            lastSyncedAt: DateTime.now(),
+          ),
+        );
   }
 
   @override

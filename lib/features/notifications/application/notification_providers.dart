@@ -9,6 +9,9 @@ import '../data/persistent_notification_repository.dart';
 import '../data/notification_repository.dart';
 import '../domain/notification.dart';
 
+/// Generates synthetic in-app notification entries from pending incoming
+/// challenges so the Alerts tab reflects new challenges even before the
+/// backend writes a push notification record.
 final notificationSeedProvider = Provider<List<AppNotification>>((ref) {
   final user = ref.watch(currentUserProvider);
   if (user == null) {
@@ -33,14 +36,30 @@ final notificationSeedProvider = Provider<List<AppNotification>>((ref) {
 final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
   final user = ref.watch(currentUserProvider);
   if (user == null) {
+    // Use persistent storage with synthetic seeds for unauthenticated state.
+    final seeds = ref.watch(notificationSeedProvider);
     return PersistentNotificationRepository(
-      seedNotifications: const [],
+      seedNotifications: seeds,
       preferences: SharedPreferencesAsync(),
     );
   }
   return FirestoreNotificationRepository(recipientId: user.id);
 });
 
-final notificationsProvider = FutureProvider<NotificationSnapshot>((ref) {
-  return ref.watch(notificationRepositoryProvider).getSnapshot();
+/// Stream of notifications for the current user.
+/// Authenticated users get Firestore real-time updates; unauthenticated users
+/// get a one-shot snapshot from the persistent local store.
+final notificationsProvider = StreamProvider<NotificationSnapshot>((ref) {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) {
+    final repository = ref.watch(notificationRepositoryProvider);
+    return Stream.fromFuture(repository.getSnapshot());
+  }
+  // Use the repository from the provider so tests can override it.
+  final repository = ref.watch(notificationRepositoryProvider);
+  if (repository is FirestoreNotificationRepository) {
+    return repository.watchSnapshot();
+  }
+  // Fallback for non-Firestore repositories (tests / demo).
+  return Stream.fromFuture(repository.getSnapshot());
 });

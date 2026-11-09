@@ -14,6 +14,7 @@ import '../features/admin/application/admin_notification_providers.dart';
 import '../features/admin/application/admin_registration_providers.dart';
 import '../features/admin/domain/admin_player_points.dart';
 import '../features/admin/domain/pending_registration.dart';
+import '../features/audit/domain/audit_event.dart';
 import '../features/auth/application/auth_providers.dart';
 import '../features/auth/domain/app_user.dart';
 import '../features/challenges/application/challenge_providers.dart';
@@ -22,12 +23,17 @@ import '../features/ladder/application/ranking_providers.dart';
 import '../features/ladder/domain/ranking_entry.dart';
 import '../features/membership/application/membership_providers.dart';
 import '../features/notifications/application/notification_providers.dart';
+import '../features/notifications/data/firestore_notification_repository.dart';
 import '../features/notifications/domain/notification.dart';
 import '../features/players/data/firebase_profile_photo_repository.dart';
+import '../features/players/domain/player.dart';
 import '../features/results/application/result_providers.dart';
 import '../features/results/domain/match_result.dart';
+import '../features/results/domain/match_score.dart';
 import '../features/results/domain/player_match_history_entry.dart';
 import '../features/players/presentation/player_avatar.dart';
+import '../features/treasurer/application/treasurer_providers.dart';
+import '../features/treasurer/data/firestore_treasurer_repository.dart';
 
 class MukladderApp extends ConsumerStatefulWidget {
   const MukladderApp({super.key});
@@ -170,19 +176,16 @@ final GoRouter _router = GoRouter(
   ],
 );
 
-class AppShell extends ConsumerWidget {
+class AppShell extends StatelessWidget {
   const AppShell({required this.navigationShell, super.key});
 
   final StatefulNavigationShell navigationShell;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentUserProvider);
-    if (user != null &&
-        user.role == AppRole.player &&
-        !user.registrationApproved) {
-      return const LadderScreen();
-    }
+  Widget build(BuildContext context) {
+    // Always render the full shell with the NavigationBar so every signed-in
+    // user can click through all tabs.  Individual screens handle their own
+    // pending-player restrictions internally.
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: NavigationBar(
@@ -418,7 +421,7 @@ class LadderScreen extends ConsumerWidget {
     }
     final isPendingPlayer =
         user.role == AppRole.player && !user.registrationApproved;
-    final ranking = isPendingPlayer ? null : ref.watch(rankingProvider);
+    final ranking = ref.watch(rankingProvider);
     final challenges = isPendingPlayer
         ? const <Challenge>[]
         : ref
@@ -466,59 +469,49 @@ class LadderScreen extends ConsumerWidget {
           ],
           _LadderHero(
             displayName: user.displayName,
-            playerPosition: ranking?.maybeWhen(
+            playerPosition: ranking.maybeWhen(
               data: (entries) => _positionOf(entries, user.id),
               orElse: () => null,
             ),
-            playerCount: ranking?.maybeWhen(
+            playerCount: ranking.maybeWhen(
               data: (entries) => entries.length,
               orElse: () => null,
             ),
           ),
           const SizedBox(height: 24),
-          if (isPendingPlayer) ...[
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.lock_outline),
-                title: Text('Member standings are for approved players'),
-                subtitle: Text(
-                  'The member list and ladder standings will be available '
-                  'after an Admin approves your registration.',
-                ),
+          Text(
+            'Current standings',
+            style: Theme.of(context).textTheme.titleLarge
+                ?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            isPendingPlayer
+                ? 'View the member list and standings while your membership is reviewed.'
+                : 'Standings follow the ranking feed configured for this tournament.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ranking.when(
+            loading: () => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(32),
+                child: CircularProgressIndicator(),
               ),
             ),
-          ] else ...[
-            Text(
-              'Current standings',
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Standings follow the ranking feed configured for this tournament.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ranking!.when(
-              loading: () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(),
-                ),
-              ),
-              error: (error, stackTrace) =>
-                  _RankingError(onRetry: () => ref.invalidate(rankingProvider)),
-              data: (entries) => entries.isEmpty
-                  ? const _EmptyRanking()
-                  : _RankingList(
-                      entries: entries,
-                      currentUserId: user.id,
-                      cooldownStartedAt: cooldownStartedAt,
-                    ),
-            ),
-          ],
+            error: (error, stackTrace) =>
+                _RankingError(onRetry: () => ref.invalidate(rankingProvider)),
+            data: (entries) => entries.isEmpty
+                ? const _EmptyRanking()
+                : _RankingList(
+                    entries: entries,
+                    currentUserId: user.id,
+                    cooldownStartedAt: cooldownStartedAt,
+                    canCreateChallenges: !isPendingPlayer,
+                  ),
+          ),
         ],
       ),
     );
@@ -530,11 +523,13 @@ class _RankingList extends StatelessWidget {
     required this.entries,
     required this.currentUserId,
     required this.cooldownStartedAt,
+    required this.canCreateChallenges,
   });
 
   final List<RankingEntry> entries;
   final String currentUserId;
   final DateTime? cooldownStartedAt;
+  final bool canCreateChallenges;
 
   @override
   Widget build(BuildContext context) {
@@ -544,7 +539,16 @@ class _RankingList extends StatelessWidget {
       children: [
         ...entries.map((entry) {
           final isCurrentPlayer = entry.player.id == currentUserId;
-          final canChallenge = !isCurrentPlayer && currentPosition != null;
+          final canChallenge =
+              canCreateChallenges &&
+              !isCurrentPlayer &&
+              currentPosition != null;
+          // Only allow the Normal challenge option for players ranked above
+          // (smaller position number) the current user.  Pre-disabling here
+          // avoids a misleading snackbar error after the user taps.
+          // canChallenge already guarantees currentPosition is non-null.
+          final canNormalChallenge =
+              canChallenge && entry.position < currentPosition;
           return Card(
             color: isCurrentPlayer
                 ? Theme.of(context).colorScheme.primaryContainer
@@ -596,19 +600,27 @@ class _RankingList extends StatelessWidget {
                           _createGodChallenge(context, entry, currentUserId);
                         }
                       },
-                      itemBuilder: (context) => const [
+                      itemBuilder: (context) => [
                         PopupMenuItem(
                           value: 'normal',
-                          child: Text('Normal challenge'),
+                          enabled: canNormalChallenge,
+                          child: Opacity(
+                            opacity: canNormalChallenge ? 1.0 : 0.4,
+                            child: const Text('Normal challenge'),
+                          ),
                         ),
-                        PopupMenuItem(
+                        const PopupMenuItem(
                           value: 'god',
                           child: Text('G.O.D. challenge'),
                         ),
                       ],
                     )
                   : Text(
-                      isCurrentPlayer ? 'You' : 'Join the ladder to challenge',
+                      isCurrentPlayer
+                          ? 'You'
+                          : canCreateChallenges
+                          ? 'Join the ladder to challenge'
+                          : 'Challenges available after approval',
                       style: Theme.of(context).textTheme.labelSmall,
                     ),
             ),
@@ -1154,6 +1166,16 @@ class _ProfilePhotoEditorState extends ConsumerState<_ProfilePhotoEditor> {
     _photoUrl = widget.user.photoUrl;
   }
 
+  @override
+  void didUpdateWidget(_ProfilePhotoEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // If the auth stream pushes a new photo URL (e.g. after upload settles),
+    // reflect it without waiting for a full widget rebuild.
+    if (widget.user.photoUrl != null && widget.user.photoUrl != _photoUrl) {
+      _photoUrl = widget.user.photoUrl;
+    }
+  }
+
   Future<void> _choosePhoto() async {
     setState(() {
       _busy = true;
@@ -1261,6 +1283,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   final _displayNameController = TextEditingController();
   bool _registering = false;
   AppRole _signInRole = AppRole.player;
+  AppRole _signUpRole = AppRole.player;
   bool _busy = false;
   String? _error;
   Uint8List? _selectedProfilePhoto;
@@ -1336,11 +1359,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           email: email,
           password: password,
           displayName: displayName,
+          role: _signUpRole,
           profilePhoto: _selectedProfilePhoto,
         );
         ref.invalidate(authStateProvider);
         if (mounted) {
-          context.go('/ladder');
+          context.go(switch (_signUpRole) {
+            AppRole.admin => '/admin',
+            AppRole.treasurer => '/treasurer',
+            AppRole.player => '/ladder',
+          });
         }
       } else {
         final user = await service.signIn(email: email, password: password);
@@ -1498,16 +1526,68 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                           : 'Change profile photo',
                     ),
                   ),
-                  const Text('JPG image, up to 5 MB'),
+                  if (_selectedProfilePhoto != null) ...[
+                    const SizedBox(height: 4),
+                    TextButton.icon(
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() => _selectedProfilePhoto = null),
+                      icon: const Icon(Icons.clear, size: 16),
+                      label: const Text('Remove photo'),
+                    ),
+                  ],
+                  const Text('JPG image, up to 5 MB',
+                      style: TextStyle(fontSize: 12)),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             TextField(
               controller: _displayNameController,
               textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(labelText: 'Display name'),
+              onChanged: (_) => setState(() {}), // refresh avatar preview
+              decoration: const InputDecoration(
+                labelText: 'Display name',
+                border: OutlineInputBorder(),
+              ),
             ),
+            const SizedBox(height: 16),
+            // Role selector on sign-up form
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Account type',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+            ),
+            const SizedBox(height: 8),
+            SegmentedButton<AppRole>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: AppRole.player, label: Text('Player')),
+                ButtonSegment(value: AppRole.admin, label: Text('Admin')),
+                ButtonSegment(
+                    value: AppRole.treasurer, label: Text('Treasurer')),
+              ],
+              selected: {_signUpRole},
+              onSelectionChanged: _busy
+                  ? null
+                  : (selection) => setState(() {
+                        _signUpRole = selection.single;
+                        _error = null;
+                      }),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _signUpRole == AppRole.player
+                  ? 'Players join the ladder and place challenges.'
+                  : 'Admin and Treasurer accounts require owner verification before granting full access.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
           ],
           TextField(
             controller: _emailController,
@@ -1543,6 +1623,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 : () => setState(() {
                     _registering = !_registering;
                     _signInRole = AppRole.player;
+                    _signUpRole = AppRole.player;
+                    _selectedProfilePhoto = null;
                     _error = null;
                   }),
             child: Text(
@@ -1631,22 +1713,43 @@ class _NotificationSyncBanner extends StatelessWidget {
   }
 }
 
-class _NotificationTile extends StatelessWidget {
+class _NotificationTile extends ConsumerWidget {
   const _NotificationTile({required this.notification});
 
   final AppNotification notification;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Card(
       child: ListTile(
         leading: Icon(
           notification.isRead
               ? Icons.notifications_none
               : Icons.notifications_active,
+          color: notification.isRead
+              ? null
+              : Theme.of(context).colorScheme.primary,
         ),
-        title: Text(notification.title),
+        title: Text(
+          notification.title,
+          style: notification.isRead
+              ? null
+              : const TextStyle(fontWeight: FontWeight.w700),
+        ),
         subtitle: Text(notification.body),
+        onTap: notification.isRead
+            ? null
+            : () async {
+                try {
+                  final user = ref.read(currentUserProvider);
+                  if (user == null) return;
+                  await FirestoreNotificationRepository(
+                    recipientId: user.id,
+                  ).markRead(notification.id);
+                } catch (_) {
+                  // markRead failure is non-critical; ignore silently.
+                }
+              },
       ),
     );
   }
@@ -1741,6 +1844,7 @@ class AdminScreen extends ConsumerWidget {
               subtitle: 'Recorded tournament activity',
               icon: Icons.history,
               value: '${data.auditEvents}',
+              onTap: () => _showAuditLog(context, ref),
             ),
             const SizedBox(height: 12),
             const _AdminPlayerPointsSection(),
@@ -2218,38 +2322,199 @@ class TreasurerScreen extends ConsumerWidget {
       return const _RoleDeniedScreen(requiredRole: AppRole.treasurer);
     }
 
-    final ranking = ref.watch(rankingProvider);
+    final overview = ref.watch(paymentOverviewProvider);
     return Scaffold(
-      appBar: AppBar(title: const AppBrandLockup(compact: true)),
-      body: ranking.when(
+      appBar: AppBar(
+        title: const AppBrandLockup(compact: true),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh payment overview',
+            onPressed: () => ref.invalidate(paymentOverviewProvider),
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: overview.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) =>
-            const Center(child: Text('Unable to load payment overview.')),
+        error: (error, _) => Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.cloud_off_outlined, size: 40),
+                const SizedBox(height: 12),
+                const Text('Unable to load payment overview.'),
+                const SizedBox(height: 12),
+                FilledButton.tonal(
+                  onPressed: () => ref.invalidate(paymentOverviewProvider),
+                  child: const Text('Try again'),
+                ),
+              ],
+            ),
+          ),
+        ),
         data: (entries) => ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const Text(
+            Text(
               'Payment-status overview',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: Theme.of(context).textTheme.headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Payment status is a flag only. Payment credentials and '
-              'processing are not stored in MUKLadder.',
-            ),
-            const SizedBox(height: 16),
-            ...entries.map(
-              (entry) => ListTile(
-                leading: const Icon(Icons.person_outline),
-                title: Text(entry.player.displayName),
-                subtitle: Text('Position ${entry.position}'),
-                trailing: Text(entry.player.paymentStatus.name),
+            const SizedBox(height: 4),
+            Text(
+              'Verify payments externally via MTN MoMo, then update the '
+              'status flag here. Payment credentials are not stored.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
+            const SizedBox(height: 4),
+            Card(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              child: const ListTile(
+                leading: Icon(Icons.lock_outline),
+                title: Text('Read-only: ladder positions are protected'),
+                subtitle: Text(
+                  'Only payment status may be changed from this workspace.',
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (entries.isEmpty)
+              const Card(
+                child: ListTile(
+                  leading: Icon(Icons.people_outline),
+                  title: Text('No player records found'),
+                ),
+              )
+            else
+              ...entries.map(
+                (entry) => _TreasurerPlayerTile(entry: entry),
+              ),
           ],
         ),
       ),
     );
+  }
+}
+
+class _TreasurerPlayerTile extends ConsumerWidget {
+  const _TreasurerPlayerTile({required this.entry});
+
+  final TreasurerPlayerEntry entry;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final statusColor = switch (entry.paymentStatus) {
+      PaymentStatus.paid => Colors.green.shade700,
+      PaymentStatus.overdue => Theme.of(context).colorScheme.error,
+      PaymentStatus.pending => Colors.orange.shade700,
+      PaymentStatus.unknown => Theme.of(context).colorScheme.onSurfaceVariant,
+    };
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+          child: Text(
+            entry.position > 0 ? '${entry.position}' : '—',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+        ),
+        title: Text(
+          entry.displayName,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(
+          entry.paymentReference != null
+              ? 'Ref: ${entry.paymentReference}'
+              : 'No payment reference',
+        ),
+        trailing: Chip(
+          label: Text(
+            entry.paymentStatus.name,
+            style: TextStyle(color: statusColor, fontWeight: FontWeight.w700),
+          ),
+          side: BorderSide(color: statusColor),
+        ),
+        onTap: () => _showUpdateDialog(context, ref),
+      ),
+    );
+  }
+
+  Future<void> _showUpdateDialog(BuildContext context, WidgetRef ref) async {
+    final newStatus = await showDialog<PaymentStatus>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+        title: Text('Update ${entry.displayName}'),
+        children: [
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            child: Text(
+              'Choose the new payment status after verifying the '
+              'payment externally in MTN MoMo.',
+            ),
+          ),
+          const Divider(),
+          for (final status in PaymentStatus.values)
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(dialogContext, status),
+              child: Row(
+                children: [
+                  Icon(
+                    switch (status) {
+                      PaymentStatus.paid => Icons.check_circle_outline,
+                      PaymentStatus.overdue => Icons.warning_amber_outlined,
+                      PaymentStatus.pending => Icons.hourglass_top_rounded,
+                      PaymentStatus.unknown => Icons.help_outline,
+                    },
+                  ),
+                  const SizedBox(width: 12),
+                  Text(status.name),
+                  if (status == entry.paymentStatus) ...[
+                    const Spacer(),
+                    const Icon(Icons.check, size: 16),
+                  ],
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+    if (newStatus == null ||
+        newStatus == entry.paymentStatus ||
+        !context.mounted) {
+      return;
+    }
+    try {
+      await ref
+          .read(treasurerRepositoryProvider)
+          .updatePaymentStatus(playerId: entry.playerId, status: newStatus);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${entry.displayName} payment status updated to ${newStatus.name}.',
+            ),
+          ),
+        );
+      }
+    } on FirebaseFunctionsException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message ?? error.code)),
+        );
+      }
+    } on FirebaseException catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message ?? error.code)),
+        );
+      }
+    }
   }
 }
 
@@ -2259,12 +2524,14 @@ class _AdminSummaryCard extends StatelessWidget {
     required this.subtitle,
     required this.icon,
     required this.value,
+    this.onTap,
   });
 
   final String title;
   final String subtitle;
   final IconData icon;
   final String value;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -2279,13 +2546,23 @@ class _AdminSummaryCard extends StatelessWidget {
         ),
         title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text(subtitle),
-        trailing: Text(
-          value,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            color: Theme.of(context).colorScheme.primary,
-            fontWeight: FontWeight.w800,
-          ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            if (onTap != null) ...[
+              const SizedBox(width: 4),
+              const Icon(Icons.chevron_right),
+            ],
+          ],
         ),
+        onTap: onTap,
       ),
     );
   }
@@ -2640,6 +2917,20 @@ class _ChallengeCard extends StatelessWidget {
 String _formatChallengeDate(DateTime date) =>
     '${date.day}/${date.month}/${date.year}';
 
+void _showAuditLog(BuildContext context, WidgetRef ref) {
+  final container = ProviderScope.containerOf(context);
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    builder: (_) => UncontrolledProviderScope(
+      container: container,
+      child: const _AuditLogSheet(),
+    ),
+  );
+}
+
+
 class _ScoreDialog extends StatefulWidget {
   const _ScoreDialog();
 
@@ -2649,11 +2940,23 @@ class _ScoreDialog extends StatefulWidget {
 
 class _ScoreDialogState extends State<_ScoreDialog> {
   final _controller = TextEditingController();
+  String? _error;
 
   @override
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  void _submit() {
+    final score = _controller.text.trim();
+    if (!MatchScore.isValid(score)) {
+      setState(() {
+        _error = 'Enter a valid score, e.g. 6-4, 6-3 (challenger first).';
+      });
+      return;
+    }
+    Navigator.pop(context, score);
   }
 
   @override
@@ -2670,9 +2973,15 @@ class _ScoreDialogState extends State<_ScoreDialog> {
           const SizedBox(height: 12),
           TextField(
             controller: _controller,
-            decoration: const InputDecoration(
+            onChanged: (_) {
+              if (_error != null) {
+                setState(() => _error = null);
+              }
+            },
+            decoration: InputDecoration(
               labelText: 'Score (challenger first)',
               hintText: '6-4, 6-3',
+              errorText: _error,
             ),
           ),
         ],
@@ -2683,10 +2992,136 @@ class _ScoreDialogState extends State<_ScoreDialog> {
           child: const Text('Cancel'),
         ),
         FilledButton(
-          onPressed: () => Navigator.pop(context, _controller.text),
+          onPressed: _submit,
           child: const Text('Submit'),
         ),
       ],
+    );
+  }
+}
+
+/// Bottom-sheet showing the full audit event log.  Only the Admin role
+/// reaches this widget; role enforcement happens in the parent [AdminScreen].
+class _AuditLogSheet extends ConsumerWidget {
+  const _AuditLogSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final events = ref.watch(auditEventsProvider);
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.75,
+      maxChildSize: 0.95,
+      minChildSize: 0.4,
+      builder: (context, scrollController) {
+        return Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 8, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Audit history',
+                      style: Theme.of(context).textTheme.titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Refresh audit log',
+                    icon: const Icon(Icons.refresh),
+                    onPressed: () => ref.invalidate(auditEventsProvider),
+                  ),
+                  IconButton(
+                    tooltip: 'Close',
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(),
+            Expanded(
+              child: events.when(
+                loading: () =>
+                    const Center(child: CircularProgressIndicator()),
+                error: (error, _) => Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.error_outline, size: 36),
+                        const SizedBox(height: 12),
+                        const Text('Unable to load the audit log.'),
+                        const SizedBox(height: 12),
+                        FilledButton.tonal(
+                          onPressed: () =>
+                              ref.invalidate(auditEventsProvider),
+                          child: const Text('Try again'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                data: (auditEvents) {
+                  if (auditEvents.isEmpty) {
+                    return const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: Text('No audit events recorded yet.'),
+                      ),
+                    );
+                  }
+                  return ListView.separated(
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+                    itemCount: auditEvents.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      return _AuditEventTile(event: auditEvents[index]);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _AuditEventTile extends StatelessWidget {
+  const _AuditEventTile({required this.event});
+
+  final AuditEvent event;
+
+  @override
+  Widget build(BuildContext context) {
+    final date = event.createdAt.toLocal();
+    final dateLabel =
+        '${date.day}/${date.month}/${date.year} '
+        '${date.hour.toString().padLeft(2, '0')}:'
+        '${date.minute.toString().padLeft(2, '0')}';
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(vertical: 4),
+      leading: const CircleAvatar(child: Icon(Icons.history, size: 18)),
+      title: Text(
+        event.eventType,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        '${event.entityType} · ${event.entityId}\n'
+        'Actor: ${event.actorId}\n'
+        'After: ${event.after}'
+        '${event.before != null ? '\nBefore: ${event.before}' : ''}',
+      ),
+      trailing: Text(
+        dateLabel,
+        style: Theme.of(context).textTheme.labelSmall,
+      ),
+      isThreeLine: true,
     );
   }
 }

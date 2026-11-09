@@ -118,6 +118,10 @@ project.
   server time on sign-in, app resume and a five-minute foreground heartbeat.
 - Uses Firestore repositories for ranking, challenges, results, audit reads and
   notification history.
+- Lets any signed-in player view ladder standings through the authenticated
+  `getPublicLadder` callable, including before Admin membership approval. The
+  callable returns only public ranking and player fields; private payment and
+  account data remain protected by Firestore Rules.
 - Uploads optional JPEG profile photos to Firebase Storage during registration
   and lets players replace them from their Profile.
 - Protects client access with the checked-in Firestore Security Rules.

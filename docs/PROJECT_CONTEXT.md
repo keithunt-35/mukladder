@@ -58,9 +58,13 @@ opponents from Firestore; this is match-score history, not an authoritative
 ladder-point total.
 
 Pending player accounts open the player dashboard with the Join Ladder/payment
-workflow. The member directory and standings remain restricted to approved
-members. Admin/Treasurer roles are assigned by the project owner; the app does
-not use a shared client-side Admin key.
+workflow and can view the member list and ladder standings. The public ladder
+view is served by an authenticated callable that returns only player names,
+photos, positions, activity timestamps and active state; it does not expose
+payment references or other account data. Challenges and other member-only
+operations remain restricted to approved members. Admin/Treasurer roles are
+assigned by the project owner; the app does not use a shared client-side Admin
+key.
 
 The full official MUK Ladder Rules, 2025 document is not in the repository,
 and its applicability to the 2026 tournament is unconfirmed. The provisional

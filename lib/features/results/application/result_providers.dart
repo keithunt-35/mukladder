@@ -23,8 +23,9 @@ final resultRepositoryProvider = Provider<ResultRepository>((ref) {
   );
 });
 
-final resultsProvider = FutureProvider<List<MatchResult>>((ref) {
-  return ref.watch(resultRepositoryProvider).getResults();
+/// Real-time stream of all results for challenges involving the signed-in user.
+final resultsProvider = StreamProvider<List<MatchResult>>((ref) {
+  return ref.watch(resultRepositoryProvider).watchResults();
 });
 
 final playerMatchHistoryRepositoryProvider =

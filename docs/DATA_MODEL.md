@@ -85,6 +85,14 @@ confirmed scoring rules and a trusted backend.
 Official ranking mutations are backend-only and should use a transaction or
 equivalent concurrency-safe operation.
 
+Signed-in players can view ladder standings before membership approval through
+the authenticated `getPublicLadder` callable. It joins ranking documents to
+player records on the server and returns only `playerId`, `position`,
+`displayName`, `photoUrl`, `lastActivityAt` and `active`. It must not return
+payment references, payment status, email addresses or other private fields.
+Direct Firestore ranking and player reads remain subject to the existing
+Security Rules; pending clients do not receive the full player documents.
+
 ### `playerPoints/{playerId}` and `playerPointEvents/{requestId}`
 
 `playerPoints` stores `playerId`, `totalPoints`, `createdAt`, `updatedAt` and

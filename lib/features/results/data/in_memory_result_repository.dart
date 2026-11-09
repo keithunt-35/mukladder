@@ -22,6 +22,12 @@ class InMemoryResultRepository implements ResultRepository {
     return List.unmodifiable(_results);
   }
 
+  /// In-memory stream: emits the current list once and completes.
+  @override
+  Stream<List<MatchResult>> watchResults() {
+    return Stream.value(List.unmodifiable(_results));
+  }
+
   @override
   Future<MatchResult> submitResult({
     required String challengeId,

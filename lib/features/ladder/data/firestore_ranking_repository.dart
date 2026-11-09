@@ -1,19 +1,29 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import '../../players/domain/player.dart';
 import '../domain/ranking_entry.dart';
 import 'ranking_repository.dart';
 
 class FirestoreRankingRepository implements RankingRepository {
-  FirestoreRankingRepository({FirebaseFirestore? firestore})
-    : _firestore = firestore ?? FirebaseFirestore.instance;
+  FirestoreRankingRepository({
+    FirebaseFirestore? firestore,
+    FirebaseFunctions? functions,
+    this.publicOnly = false,
+  }) : _firestore = firestore ?? FirebaseFirestore.instance,
+       _functions = functions ?? FirebaseFunctions.instance;
 
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
+  final bool publicOnly;
 
   @override
   Future<List<RankingEntry>> getRanking() async {
+    if (publicOnly) {
+      return _getPublicRanking();
+    }
     final snapshots = await Future.wait([
       _firestore.collection('rankings').orderBy('position').get(),
       _firestore.collection('players').get(),
@@ -23,6 +33,9 @@ class FirestoreRankingRepository implements RankingRepository {
 
   @override
   Stream<List<RankingEntry>> watchRanking() {
+    if (publicOnly) {
+      return Stream.fromFuture(_getPublicRanking());
+    }
     final controller = StreamController<List<RankingEntry>>();
     QuerySnapshot<Map<String, dynamic>>? rankingSnapshot;
     QuerySnapshot<Map<String, dynamic>>? playerSnapshot;
@@ -64,6 +77,54 @@ class FirestoreRankingRepository implements RankingRepository {
       };
 
     return controller.stream;
+  }
+
+  Future<List<RankingEntry>> _getPublicRanking() async {
+    final response = await _functions.httpsCallable('getPublicLadder').call();
+    final data = response.data;
+    if (data is! List) {
+      throw StateError('The public ladder response is invalid.');
+    }
+    return data
+        .map((item) {
+          if (item is! Map<Object?, Object?>) {
+            throw StateError('A public ladder entry is invalid.');
+          }
+          final playerId = item['playerId'];
+          final displayName = item['displayName'];
+          final position = item['position'];
+          final photoUrl = item['photoUrl'];
+          final lastActivityAt = item['lastActivityAt'];
+          final active = item['active'];
+          if (playerId is! String ||
+              displayName is! String ||
+              position is! int ||
+              position < 1 ||
+              (photoUrl != null && photoUrl is! String) ||
+              (lastActivityAt != null && lastActivityAt is! String) ||
+              active is! bool) {
+            throw StateError('A public ladder entry has invalid fields.');
+          }
+          final activityDate = lastActivityAt == null
+              ? null
+              : lastActivityAt is String
+              ? DateTime.tryParse(lastActivityAt)
+              : null;
+          if (lastActivityAt != null && activityDate == null) {
+            throw StateError('A public ladder activity date is invalid.');
+          }
+          return RankingEntry(
+            position: position,
+            player: Player(
+              id: playerId,
+              displayName: displayName,
+              photoUrl: photoUrl is String ? photoUrl : null,
+              lastActivityAt: activityDate,
+              active: active,
+            ),
+          );
+        })
+        .toList(growable: false);
   }
 
   List<RankingEntry> _fromDocuments(

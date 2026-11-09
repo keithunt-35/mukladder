@@ -11,6 +11,7 @@ abstract interface class AuthService {
     required String email,
     required String password,
     required String displayName,
+    AppRole role,
     Uint8List? profilePhoto,
   });
 

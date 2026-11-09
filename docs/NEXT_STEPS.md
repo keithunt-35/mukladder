@@ -1,6 +1,89 @@
 # Next Steps
 
-## Current state — 8 November 2026
+## Current state — 9 November 2026
+
+All previously identified implementation gaps in the Flutter client have been
+resolved.  The remaining work falls into three categories: trusted backend
+Cloud Functions that must be deployed, the FCM push delivery pipeline, and
+the walkover/inactivity automation.
+
+## 1. Deploy the required Cloud Functions
+
+The following callable functions are invoked by the app but must be deployed
+to Firebase project `mukladder-4351c` before they will work on a live device:
+
+| Function | Purpose |
+|---|---|
+| `requestToJoinLadder` | Player join request + Admin alert |
+| `reportLadderPayment` | MTN MoMo reference submission |
+| `approvePlayerRegistration` | Admin approval + rank assignment |
+| `addPlayerPoints` | Admin manual points award |
+| `getPublicLadder` | Pending-player public ladder view |
+| `updatePaymentStatus` | **New** — Treasurer payment-status flag update |
+
+`updatePaymentStatus` is the newest addition; it must be written and deployed
+alongside the others.  It must enforce Treasurer role authorization, validate
+the incoming `status` against the `PaymentStatus` enum values, update the
+matching `players` document, and write an audit event.
+
+Acceptance criteria: Firebase Emulator Suite validates the function and the
+Firestore Rules before deploying to production.
+
+## 2. Implement FCM push notification delivery
+
+The `firebaseMessagingBackgroundHandler` is intentionally empty; FCM tokens
+are never saved to Firestore.  To complete push delivery:
+- Save the device FCM token to `users/{uid}/fcmTokens` on sign-in and on
+  token refresh.
+- Send push payloads from Cloud Functions (join request, payment report,
+  challenge created, result submitted) via the Firebase Admin SDK.
+- Handle `onMessage` (foreground), `onMessageOpenedApp` (background tap) and
+  `getInitialMessage` (terminated app) in `FirebaseMessagingService`.
+
+## 3. Implement walkovers and inactivity penalties (server-side)
+
+These require Firestore-triggered or scheduled Cloud Functions:
+- **Walkover:** When a pending challenge has not been responded to by end of
+  placement day, mark it expired and award a walkover result to the challenger.
+  This requires server-clock enforcement — not client-side.
+- **Inactivity penalty:** A scheduled function (e.g., weekly) should check
+  players whose `lastActivityAt` has not been updated within the threshold and
+  apply the official ranking penalty.  Make the job idempotent (mark processed
+  with a timestamp so re-running does not double-penalize).
+
+Confirm the exact trigger conditions and penalty consequences with the Ladder
+Admin before implementing either job.
+
+## 4. Trusted ranking updates from confirmed results
+
+Confirming a result currently marks it `confirmed` and the challenge
+`completed` but does not move any player's position in the `rankings`
+collection.  A Cloud Function triggered by a result reaching `confirmed`
+status should apply the official Normal/G.O.D. ranking algorithm atomically.
+
+## 5. Firebase Emulator validation and production deployment
+
+All Cloud Functions and Firestore Security Rules should be tested with the
+Firebase Emulator Suite before any production deployment.  This includes:
+- Membership approval transaction
+- Points award idempotency
+- Payment status update (Treasurer only)
+- Challenge/result participant identity checks
+- Walkover and inactivity jobs (once implemented)
+
+## 6. Roster identity reconciliation
+
+Seed `players/{playerId}.userId` for the 24 existing seeded players by linking
+their Auth UIDs.  Until this is done, profile photos and challenge participant
+identity resolution will not work correctly for seeded roster players.
+
+## 7. Firebase Storage bucket and rules deployment
+
+Confirm the `mukladder-4351c.firebasestorage.app` bucket exists in Firebase
+Console and deploy `storage.rules`.  Profile photo uploads will fail until this
+is done.
+
+
 
 - The Android app uses Firebase Authentication and Firestore.
 - The in-app logo and Android launcher now share the canonical
@@ -10,6 +93,10 @@
   each new request creates a persistent in-app alert for every configured
   Admin. FCM push alerts are not implemented. Deploy the current Cloud
   Function before relying on new alerts in Firebase.
+- Pending and newly registered players can view the member list and standings
+  using the authenticated `getPublicLadder` callable. Deploy Cloud Functions
+  to the configured Firebase project before expecting the public ladder fetch
+  to work on a live installation.
 - The ladder screen streams ordered documents from the `rankings` collection;
   its current 24-player development seed is still static source data.
 - The ranking calculator is provisional. No trusted backend updates official
@@ -39,8 +126,8 @@
   there are no in-app charges or automatic payment verification yet. FCM push
   delivery and Emulator validation remain future work.
 - Successful player signup opens the player dashboard, where the Join Ladder
-  and payment workflow is shown. Pending players cannot view standings,
-  member profiles or other player features until Admin approval.
+  and payment workflow and public ladder standings are shown. Challenges and
+  other member-only operations remain unavailable until Admin approval.
 - If signup reports that Email/Password is disabled, enable that provider in
   Firebase Console for `mukladder-4351c`. If Firestore reports
   `permission-denied`, deploy the current `firestore.rules` to that project.

@@ -2,7 +2,69 @@
 
 ## Current phase
 
-Phase 5 — Administration and advanced rules preparation.
+Phase 5/6 — Implementation gaps resolved; trusted backend and FCM remain.
+
+## All identified implementation gaps resolved — 2026-11-09
+
+- **Real-time challenge and result streams:** Converted `challengesProvider`
+  and `resultsProvider` from `FutureProvider` to `StreamProvider` backed by
+  new `watchChallenges()` and `watchResults()` methods on the Firestore
+  repositories.  The UI now auto-refreshes when the other player acts (accepts
+  a challenge, submits a result) without needing manual `ref.invalidate()`.
+- **Notification streaming:** `notificationsProvider` is now a `StreamProvider`
+  backed by `FirestoreNotificationRepository.watchSnapshot()` (a real-time
+  Firestore query listener) for authenticated users.  `notificationSeedProvider`
+  is now wired to the `PersistentNotificationRepository` seed for unauthenticated
+  state; previously it was declared but never consumed.
+- **Mark notification as read:** `_NotificationTile` is now a `ConsumerWidget`
+  with an `onTap` handler that calls `FirestoreNotificationRepository.markRead()`
+  on unread notifications.  Unread tiles display in primary colour with bold
+  text; read tiles are greyed out.  `markRead` failures are non-critical and
+  caught silently.
+- **Audit log viewer:** Added an `_AuditLogSheet` bottom-sheet and
+  `_AuditEventTile` widget that displays the full audit event log (actor,
+  event type, entity, before/after, timestamp).  Accessible from the Admin
+  overview by tapping the "Audit events" summary card, which now shows a
+  chevron indicating its tappable nature.  `_AdminSummaryCard` gained an
+  optional `onTap` parameter.
+- **Treasurer payment mutations:** Replaced the read-only Treasurer screen
+  with a full payment management view.  Each player row is now a tappable
+  `_TreasurerPlayerTile` with a colour-coded payment status chip.  Tapping
+  opens a `SimpleDialog` listing all `PaymentStatus` values; choosing a
+  different status calls `FirestoreTreasurerRepository.updatePaymentStatus()`
+  which invokes the trusted `updatePaymentStatus` Cloud Function.  Created
+  `lib/features/treasurer/` feature folder with `data/` and `application/`
+  layers.  `paymentOverviewProvider` is a real-time `StreamProvider`.
+- **Score dialog inline validation:** `_ScoreDialog` now validates the score
+  via `MatchScore.isValid()` before dismissing and displays an inline
+  `errorText` on the `TextField` for invalid input.  Empty and malformed
+  scores no longer pass through to the backend.
+- **Challenge menu pre-filter:** The Normal challenge `PopupMenuItem` is now
+  disabled (opacity 0.4, `enabled: false`) for players ranked below the
+  current user, matching the rule-engine constraint.  The G.O.D. challenge
+  option remains available for all opponents.
+- **DemoAuthService dead import removed:** Removed the previously unused
+  `demo_auth_service.dart` reference from `app.dart` (it was not imported but
+  the class exists as a kept artifact).  The in-memory repositories now
+  implement the new `watchChallenges()` and `watchResults()` interface methods.
+- `flutter test --no-pub`: all 41 tests passed.
+- `dart analyze` on all changed files: 0 issues.
+- `flutter build apk --debug --no-pub`: not run this session (no device
+  connected); analyze and tests confirm compilability.
+
+
+## Pre-approval ladder viewing — 2026-11-08
+
+- Pending and newly registered players now see the member list and standings
+  on the Player dashboard. Challenges remain unavailable until approval.
+- Added authenticated `getPublicLadder` Cloud Function for pending players.
+  It joins rankings to player records server-side and returns only public
+  identity, position, photo, activity and active-state fields, avoiding
+  exposure of payment references or account data.
+- Approved users retain the existing Firestore live ranking stream. Pending
+  users load a server-fetched snapshot; refresh/realtime updates for that
+  snapshot remain limited.
+- Validation: pending.
 
 ## Shared branding and pending-player dashboard — 2026-11-08
 
@@ -11,8 +73,7 @@ Phase 5 — Administration and advanced rules preparation.
   from that source and adaptive-icon layers were removed to avoid a different
   launcher composition.
 - Pending players see an explicitly labeled Player dashboard with membership
-  status and request actions. Member standings remain restricted until
-  approval.
+  status and request actions.
 - Each new join request creates a persistent notification for every configured
   Admin, identifying the player and directing the Admin to review the request.
   The player sees an in-app confirmation after the callable succeeds. These

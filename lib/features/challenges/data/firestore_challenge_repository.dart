@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -34,6 +36,65 @@ class FirestoreChallengeRepository implements ChallengeRepository {
       }
     }
     return documents.values.map(_fromDocument).toList(growable: false);
+  }
+
+  /// Returns a real-time stream of all challenges where the current user is
+  /// either the challenger or the challenged player.  Two Firestore listeners
+  /// are merged and deduplicated so each challenge appears exactly once.
+  @override
+  Stream<List<Challenge>> watchChallenges() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      return Stream.error(
+        StateError('A signed-in user is required to watch challenges.'),
+      );
+    }
+
+    final controller = StreamController<List<Challenge>>();
+    QuerySnapshot<Map<String, dynamic>>? asChallenger;
+    QuerySnapshot<Map<String, dynamic>>? asChallenged;
+    late StreamSubscription<QuerySnapshot<Map<String, dynamic>>>
+    challengerSub;
+    late StreamSubscription<QuerySnapshot<Map<String, dynamic>>>
+    challengedSub;
+
+    void emit() {
+      if (asChallenger == null || asChallenged == null) return;
+      final docs = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+      for (final snap in [asChallenger!, asChallenged!]) {
+        for (final doc in snap.docs) {
+          docs[doc.id] = doc;
+        }
+      }
+      controller.add(
+        docs.values.map(_fromDocument).toList(growable: false),
+      );
+    }
+
+    controller.onListen = () {
+      challengerSub = _firestore
+          .collection('challenges')
+          .where('challengerId', isEqualTo: userId)
+          .snapshots()
+          .listen((snap) {
+            asChallenger = snap;
+            emit();
+          }, onError: controller.addError);
+      challengedSub = _firestore
+          .collection('challenges')
+          .where('challengedId', isEqualTo: userId)
+          .snapshots()
+          .listen((snap) {
+            asChallenged = snap;
+            emit();
+          }, onError: controller.addError);
+    };
+    controller.onCancel = () async {
+      await challengerSub.cancel();
+      await challengedSub.cancel();
+    };
+
+    return controller.stream;
   }
 
   @override

@@ -6,6 +6,7 @@ const {
   calculatePositionsAfterInsertion,
 } = require('./initial_ladder_position_plan');
 const { calculatePlayerPoints } = require('./player_points_plan');
+const { toPublicLadder } = require('./public_ladder');
 const {
   isDuplicatePaymentReport,
   normalizeMtnMomoReference,
@@ -331,6 +332,32 @@ exports.requestToJoinLadder = onCall(async (request) => {
     });
     return { requested: true, duplicate: false };
   });
+});
+
+exports.getPublicLadder = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Sign in to view the ladder.');
+  }
+
+  const userSnapshot = await firestore
+    .collection('users')
+    .doc(request.auth.uid)
+    .get();
+  if (!['player', 'admin', 'treasurer'].includes(userSnapshot.data()?.role)) {
+    throw new HttpsError(
+      'permission-denied',
+      'A registered MUKLadder account is required to view the ladder.',
+    );
+  }
+
+  const [rankingsSnapshot, playersSnapshot] = await Promise.all([
+    firestore.collection('rankings').orderBy('position').get(),
+    firestore.collection('players').get(),
+  ]);
+  const playersById = new Map(
+    playersSnapshot.docs.map((document) => [document.id, document.data()]),
+  );
+  return toPublicLadder(rankingsSnapshot.docs, playersById);
 });
 
 exports.reportLadderPayment = onCall(async (request) => {
