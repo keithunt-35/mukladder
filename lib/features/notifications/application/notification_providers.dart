@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../auth/application/auth_providers.dart';
@@ -35,6 +36,12 @@ final notificationRepositoryProvider = Provider<NotificationRepository>((ref) {
   if (user == null) {
     return PersistentNotificationRepository(
       seedNotifications: const [],
+      preferences: SharedPreferencesAsync(),
+    );
+  }
+  if (defaultTargetPlatform != TargetPlatform.android) {
+    return PersistentNotificationRepository(
+      seedNotifications: ref.watch(notificationSeedProvider),
       preferences: SharedPreferencesAsync(),
     );
   }

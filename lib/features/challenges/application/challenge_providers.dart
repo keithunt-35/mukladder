@@ -1,10 +1,26 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 
 import '../data/challenge_repository.dart';
 import '../data/firestore_challenge_repository.dart';
+import '../data/in_memory_challenge_repository.dart';
 import '../domain/challenge.dart';
 
 final challengeRepositoryProvider = Provider<ChallengeRepository>((ref) {
+  if (defaultTargetPlatform != TargetPlatform.android) {
+    return InMemoryChallengeRepository(
+      challenges: [
+        Challenge(
+          id: 'challenge-incoming-1',
+          challengerId: 'player-2',
+          challengedId: 'demo-player-1',
+          type: ChallengeType.normal,
+          status: ChallengeStatus.pending,
+          createdAt: DateTime(2026, 10, 23),
+        ),
+      ],
+    );
+  }
   return FirestoreChallengeRepository();
 });
 

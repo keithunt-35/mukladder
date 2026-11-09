@@ -1,4 +1,5 @@
 {
     "idf.currentSetup": "/Users/ios/.espressif/v6.1-beta1/esp-idf",
-    "java.configuration.updateBuildConfiguration": "interactive"
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "cmake.sourceDirectory": "/Users/ios/Documents/Ladder/mukladder/linux"
 }

@@ -1,10 +1,15 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 
+import '../data/demo_auth_service.dart';
 import '../data/firebase_auth_service.dart';
 import '../domain/app_user.dart';
 import '../domain/auth_service.dart';
 
 final authServiceProvider = Provider<AuthService>((ref) {
+  if (defaultTargetPlatform != TargetPlatform.android) {
+    return DemoAuthService();
+  }
   return FirebaseAuthService();
 });
 

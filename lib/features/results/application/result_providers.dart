@@ -1,13 +1,19 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../audit/data/audit_repository.dart';
 import '../../audit/data/firestore_audit_repository.dart';
+import '../../audit/data/in_memory_audit_repository.dart';
 import '../../challenges/application/challenge_providers.dart';
 import '../data/firestore_result_repository.dart';
+import '../data/in_memory_result_repository.dart';
 import '../data/result_repository.dart';
 import '../domain/match_result.dart';
 
 final auditRepositoryProvider = Provider<AuditRepository>((ref) {
+  if (defaultTargetPlatform != TargetPlatform.android) {
+    return InMemoryAuditRepository();
+  }
   return FirestoreAuditRepository();
 });
 
@@ -16,6 +22,12 @@ final auditEventsProvider = FutureProvider((ref) {
 });
 
 final resultRepositoryProvider = Provider<ResultRepository>((ref) {
+  if (defaultTargetPlatform != TargetPlatform.android) {
+    return InMemoryResultRepository(
+      challengeRepository: ref.watch(challengeRepositoryProvider),
+      auditRepository: ref.watch(auditRepositoryProvider),
+    );
+  }
   return FirestoreResultRepository(
     challengeRepository: ref.watch(challengeRepositoryProvider),
   );
