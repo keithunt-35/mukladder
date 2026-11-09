@@ -1,13 +1,16 @@
 # Data Model
 
-This is the MVP domain model and Firestore model. The development project now
+This is the MVP domain model and Firestore model. The development project
 contains the initial 24-player and ranking snapshot. Field names and
 rule-sensitive constraints must still be finalized before production use.
+Firestore ranking reads are ordered by position and the app listens for live
+document changes; the seeded ranking is not automatically recalculated after
+game results.
 
 ## Implemented pure Dart models
 
-- `Player`: identity, display name, activity timestamp, payment-status flag and
-  active state.
+- `Player`: identity, display name, optional profile photo URL, activity
+  timestamp, payment-status flag and active state.
 - `RankingEntry`: a player and a positive ladder position.
 - `Challenge`: participants, type, status and creation/proposed-date metadata.
   It rejects invalid state transitions.
@@ -19,26 +22,40 @@ rule-sensitive constraints must still be finalized before production use.
   events. The production implementation must write equivalent events in a
   trusted backend transaction.
 
-The current demo data layer uses repository interfaces with in-memory
-implementations. These implementations are intentionally temporary and do not
-represent authoritative tournament data.
+Firestore repositories are used by the connected app. In-memory repositories
+remain for isolated tests and local domain demonstrations; they are not
+authoritative tournament data.
 
 The current demo result repository accepts a provisional comma-separated score
 format such as `6-4, 6-3`, only for accepted challenges and their participants.
-This validation is not the official scoring or deadline policy; those rules
-must be verified before Firebase implementation.
+The client-side workflow is not a trusted backend rule implementation. The
+official scoring and deadline policy must be verified before production use.
 
 ## Firestore collections
 
 ### `users/{uid}`
 
-`uid`, `displayName`, `email`, `role`, `status`, `createdAt`, `updatedAt`.
+`uid`, `displayName`, `email`, `photoUrl`, `photoStoragePath`, `role`,
+`status`, `createdAt`, `updatedAt`.
 The role is written only by an authorized backend/admin workflow.
 
 ### `players/{playerId}`
 
 `userId`, `displayName`, `position`, `lastActivityAt`, `registrationStatus`,
-`paymentStatus`, `active`, `createdAt`, `updatedAt`.
+`paymentStatus`, `photoUrl`, `active`, `createdAt`, `updatedAt`.
+The app also stores `photoStoragePath` on linked profile documents.
+
+Profile photos are stored in Firebase Storage at
+`profilePhotos/{uid}/profile.jpg`. The matching download URL is copied to the
+user profile and linked player document. New registrations begin with a
+pending, inactive player document; an authorized workflow must approve and
+associate existing tournament roster entries with the player's Auth UID.
+
+The Profile match history joins the signed-in player's challenge records with
+their `results` documents and the opponent's public player profile. The score
+shown is the submitted score string, with its result status and date. It is not
+a ladder-points calculation; authoritative points and ranking changes require
+confirmed scoring rules and a trusted backend.
 
 ### `challenges/{challengeId}`
 

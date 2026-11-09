@@ -25,17 +25,40 @@ run the application.
 4. Start an Android emulator or connect an approved development device.
 5. Run `flutter run` or `flutter run -d <device-id>`.
 
-The current prototype starts in Demo mode. No Firebase project, login account
-or secret configuration is needed to try the implemented local flow.
+The Android app is connected to the development Firebase project. Sign in with
+an authorized project account or register a player account to use the app.
+Firebase configuration is checked into this workspace; never copy private
+credentials into the client or commit service-account files.
+
+### Windows: Kotlin cache errors when project and Pub cache are on different drives
+
+If Android builds fail with `this and base files have different roots` or
+`Could not close incremental caches`, put the Dart Pub cache on the same drive
+as the project. For a project in `D:\mukladder`, open a PowerShell terminal and
+run:
+
+```powershell
+$env:PUB_CACHE = 'D:\PubCache'
+flutter pub get
+flutter run -d <device-id>
+```
+
+Set `PUB_CACHE` to `D:\PubCache` in Windows user environment variables to keep
+using that cache in new terminals. The Android Gradle configuration disables
+parallel and incremental Kotlin compilation to avoid cache registration
+failures on this setup; the first build may take longer.
 
 ## What to try
 
-1. Open **Ladder** and review the 24-player Week 7 Day 5 ranking snapshot.
-2. Tap **Challenge** beside another player and confirm the request.
-3. Open **Challenges** and accept or reject the seeded incoming challenge.
-4. Open **Profile** to inspect the temporary Tugume Keith demo identity.
+1. Open **Ladder** to view the Firestore ranking feed. The development
+   collection currently starts with a 24-player Week 7 Day 5 seed.
+2. The screen refreshes when ranking documents change in Firestore.
+3. Open **Profile** to view the signed-in account. Authorized Admin and
+   Treasurer accounts see their role-specific workspace links.
 
-Demo records are held in memory and reset after an app restart.
+The seed is not recalculated by a trusted rules engine yet. The official rule
+document and a trusted backend are required before game results can update
+official positions.
 
 ## Local verification
 
@@ -52,7 +75,9 @@ The generated debug APK is at
 
 ## Firebase configuration
 
-Firebase setup is not yet complete. Follow this sequence when starting it.
+Firebase is configured for the current development workspace. Use these steps
+only when configuring another development environment or replacing the Firebase
+project.
 
 ### What the project owner must do
 
@@ -80,6 +105,8 @@ Firebase setup is not yet complete. Follow this sequence when starting it.
 - Provides registration, login, logout and session restoration.
 - Uses Firestore repositories for ranking, challenges, results, audit reads and
   notification history.
+- Uploads optional JPEG profile photos to Firebase Storage during registration
+  and lets players replace them from their Profile.
 - Protects client access with the checked-in Firestore Security Rules.
 - Requests notification permission and registers foreground/background FCM
   handlers.
@@ -87,6 +114,41 @@ Firebase setup is not yet complete. Follow this sequence when starting it.
 The remaining production requirement is a trusted backend for ranking
 transactions, official result transitions and audit-event writes. The mobile
 client deliberately cannot write rankings or audit events.
+
+### Firebase Storage for profile photos
+
+The app is configured for the `mukladder.firebasestorage.app` bucket. Before
+photo uploads can work in a Firebase project:
+
+1. In Firebase Console, confirm or create the project's Storage bucket and
+   check that its bucket name exactly matches `lib/firebase_options.dart` and
+   `android/app/google-services.json`.
+2. Review `storage.rules`. Authenticated users can view profile photos; each
+   user can upload or replace only their own JPEG (up to 5 MB).
+3. If Firebase asks to enable billing or upgrade the plan, stop and confirm the
+   project's budget before proceeding.
+4. After approval, deploy the reviewed rules with `firebase deploy --only
+   storage`.
+5. Link existing ladder roster player documents to their account by setting
+   the correct `userId`; do not match accounts using display names alone.
+
+If upload reports `object-not-found`, verify the bucket exists and the app is
+configured for that exact bucket. `putData` must complete before the app asks
+Storage for the download URL. If upload reports `unauthorized`, deploy the
+reviewed Storage rules. The photo's bytes are stored in Storage; Firestore
+stores its download URL and Storage path on both the user and player profile.
+
+Firebase download URLs contain access tokens and should be treated as
+shareable links: anyone who obtains a URL may be able to view that image.
+Players should upload only photos they are comfortable displaying to other
+ladder users and with that link-access behavior.
+
+No Storage bucket was created and no rules were deployed as part of this code
+change.
+
+The Profile screen also shows the player's submitted match scores with their
+opponents and result states. The app does not calculate official ladder points
+from those scores.
 
 ### Required configuration artifacts
 

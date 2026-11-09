@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../domain/challenge.dart';
+import '../domain/challenge_rules.dart';
 import 'challenge_repository.dart';
 
 class FirestoreChallengeRepository implements ChallengeRepository {
@@ -58,6 +59,21 @@ class FirestoreChallengeRepository implements ChallengeRepository {
     DateTime? proposedDate,
     DateTime? cooldownStartedAt,
   }) {
+    if (challengerPosition == null || challengedPosition == null) {
+      throw ArgumentError('Both players must have a current ladder position.');
+    }
+    ChallengeRules.validateNormalPlacement(
+      challengerPosition: challengerPosition,
+      challengedPosition: challengedPosition,
+      requestedAt: createdAt,
+      proposedDate: proposedDate,
+    );
+    if (cooldownStartedAt != null) {
+      ChallengeRules.validateTwoDayCooldown(
+        cooldownStartedAt: cooldownStartedAt,
+        requestedAt: createdAt,
+      );
+    }
     return _create(
       challengerId: challengerId,
       challengedId: challengedId,
@@ -81,6 +97,10 @@ class FirestoreChallengeRepository implements ChallengeRepository {
     required DateTime createdAt,
     required DateTime proposedDate,
   }) {
+    ChallengeRules.validateGodPlacement(
+      requestedAt: createdAt,
+      proposedDate: proposedDate,
+    );
     return _create(
       challengerId: challengerId,
       challengedId: challengedId,
@@ -104,7 +124,7 @@ class FirestoreChallengeRepository implements ChallengeRepository {
       'challengedId': challengedId,
       'type': type.name,
       'status': ChallengeStatus.pending.name,
-      'createdAt': Timestamp.fromDate(createdAt),
+      'createdAt': FieldValue.serverTimestamp(),
       'proposedDate': proposedDate == null
           ? null
           : Timestamp.fromDate(proposedDate),
@@ -119,19 +139,53 @@ class FirestoreChallengeRepository implements ChallengeRepository {
     required String respondentId,
     required ChallengeStatus response,
     DateTime? respondedAt,
+    DateTime? alternativeDate,
   }) async {
     final challenge = await getChallenge(challengeId);
-    if (challenge.challengedId != respondentId) {
-      throw StateError('Only the challenged player can respond.');
+    final now = respondedAt ?? DateTime.now();
+    if (challenge.status == ChallengeStatus.alternativeDateProposed) {
+      if (challenge.challengerId != respondentId) {
+        throw StateError('Only the challenger can answer a proposed date.');
+      }
+      if (response != ChallengeStatus.accepted &&
+          response != ChallengeStatus.rejected) {
+        throw StateError('Choose whether to accept the proposed date.');
+      }
+    } else {
+      if (challenge.challengedId != respondentId) {
+        throw StateError('Only the challenged player can respond.');
+      }
+      if (challenge.status == ChallengeStatus.pending) {
+        ChallengeRules.validateSameDayResponse(
+          requestedAt: challenge.createdAt,
+          respondedAt: now,
+        );
+      }
     }
-    final updated = challenge.transitionTo(response);
-    await _firestore.collection('challenges').doc(challengeId).update({
-      'status': updated.status.name,
-      'respondedAt': respondedAt == null
-          ? FieldValue.serverTimestamp()
-          : Timestamp.fromDate(respondedAt),
-    });
-    return updated;
+    if (response == ChallengeStatus.alternativeDateProposed) {
+      if (alternativeDate == null || challenge.proposedDate == null) {
+        throw ArgumentError('Choose an alternative match date.');
+      }
+      ChallengeRules.validateAlternativeDate(
+        requestedAt: challenge.createdAt,
+        proposedDate: challenge.proposedDate!,
+        alternativeDate: alternativeDate,
+      );
+    }
+    challenge.transitionTo(response);
+    final updates = <String, Object?>{
+      'status': response.name,
+      'respondedAt': FieldValue.serverTimestamp(),
+    };
+    if (response == ChallengeStatus.alternativeDateProposed) {
+      updates['alternativeDate'] = Timestamp.fromDate(alternativeDate!);
+    } else if (challenge.status == ChallengeStatus.alternativeDateProposed &&
+        response == ChallengeStatus.accepted &&
+        challenge.alternativeDate != null) {
+      updates['proposedDate'] = Timestamp.fromDate(challenge.alternativeDate!);
+    }
+    await _firestore.collection('challenges').doc(challengeId).update(updates);
+    return getChallenge(challengeId);
   }
 
   @override
@@ -165,6 +219,7 @@ class FirestoreChallengeRepository implements ChallengeRepository {
       status: ChallengeStatus.values.byName(data['status'] as String),
       createdAt: _dateFrom(data['createdAt']) ?? DateTime.now(),
       proposedDate: _dateFrom(data['proposedDate']),
+      alternativeDate: _dateFrom(data['alternativeDate']),
     );
   }
 

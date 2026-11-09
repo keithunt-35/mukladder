@@ -116,6 +116,7 @@ class InMemoryChallengeRepository implements ChallengeRepository {
     required String respondentId,
     required ChallengeStatus response,
     DateTime? respondedAt,
+    DateTime? alternativeDate,
   }) async {
     final index = _challenges.indexWhere(
       (challenge) => challenge.id == challengeId,
@@ -125,17 +126,53 @@ class InMemoryChallengeRepository implements ChallengeRepository {
     }
 
     final challenge = _challenges[index];
-    if (challenge.challengedId != respondentId) {
+    if (challenge.status == ChallengeStatus.alternativeDateProposed) {
+      if (challenge.challengerId != respondentId) {
+        throw StateError('Only the challenger can answer a proposed date.');
+      }
+      if (response != ChallengeStatus.accepted &&
+          response != ChallengeStatus.rejected) {
+        throw StateError('Choose whether to accept the proposed date.');
+      }
+    } else if (challenge.challengedId != respondentId) {
       throw StateError('Only the challenged player can respond.');
     }
-    if (respondedAt != null) {
+    if (respondedAt != null &&
+        challenge.status != ChallengeStatus.alternativeDateProposed) {
       ChallengeRules.validateSameDayResponse(
         requestedAt: challenge.createdAt,
         respondedAt: respondedAt,
       );
     }
 
-    final updatedChallenge = challenge.transitionTo(response);
+    if (response == ChallengeStatus.alternativeDateProposed) {
+      final proposedDate = challenge.proposedDate;
+      if (alternativeDate == null || proposedDate == null) {
+        throw ArgumentError('Choose an alternative match date.');
+      }
+      ChallengeRules.validateAlternativeDate(
+        requestedAt: challenge.createdAt,
+        proposedDate: proposedDate,
+        alternativeDate: alternativeDate,
+      );
+    }
+    challenge.transitionTo(response);
+    final updatedChallenge = Challenge(
+      id: challenge.id,
+      challengerId: challenge.challengerId,
+      challengedId: challenge.challengedId,
+      type: challenge.type,
+      status: response,
+      createdAt: challenge.createdAt,
+      proposedDate:
+          challenge.status == ChallengeStatus.alternativeDateProposed &&
+              response == ChallengeStatus.accepted
+          ? challenge.alternativeDate
+          : challenge.proposedDate,
+      alternativeDate: response == ChallengeStatus.alternativeDateProposed
+          ? alternativeDate
+          : challenge.alternativeDate,
+    );
     _challenges[index] = updatedChallenge;
     return updatedChallenge;
   }

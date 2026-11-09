@@ -5,10 +5,12 @@ import '../../audit/data/audit_repository.dart';
 import '../../audit/data/firestore_audit_repository.dart';
 import '../../audit/data/in_memory_audit_repository.dart';
 import '../../challenges/application/challenge_providers.dart';
+import '../data/firestore_player_match_history_repository.dart';
 import '../data/firestore_result_repository.dart';
 import '../data/in_memory_result_repository.dart';
 import '../data/result_repository.dart';
 import '../domain/match_result.dart';
+import '../domain/player_match_history_entry.dart';
 
 final auditRepositoryProvider = Provider<AuditRepository>((ref) {
   if (defaultTargetPlatform != TargetPlatform.android) {
@@ -36,6 +38,16 @@ final resultRepositoryProvider = Provider<ResultRepository>((ref) {
 final resultsProvider = FutureProvider<List<MatchResult>>((ref) {
   return ref.watch(resultRepositoryProvider).getResults();
 });
+
+final playerMatchHistoryRepositoryProvider =
+    Provider<FirestorePlayerMatchHistoryRepository>((ref) {
+      return FirestorePlayerMatchHistoryRepository();
+    });
+
+final playerMatchHistoryProvider =
+    FutureProvider.family<List<PlayerMatchHistoryEntry>, String>((ref, userId) {
+      return ref.watch(playerMatchHistoryRepositoryProvider).getHistory(userId);
+    });
 
 final resultSubmissionProvider =
     FutureProvider.family<MatchResult, ResultSubmissionRequest>((ref, request) {

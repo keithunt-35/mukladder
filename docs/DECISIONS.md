@@ -61,3 +61,22 @@ Decisions are recorded here before they become hidden assumptions. Statuses:
   role-aware routing when real authentication is added.
 - **Trade-offs:** Route configuration is an additional abstraction for the
   small initial app.
+
+## ADR-006 — Firebase Storage for profile photos
+
+- **Date:** 2026-11-04
+- **Status:** Implemented in app; Firebase bucket/rules setup pending
+- **Problem:** Let players upload a profile image that can be shown on their
+  profile and next to their name in the ladder.
+- **Options:** Store image files in Firestore, use a third-party image host, or
+  use the project's Firebase Storage bucket.
+- **Decision:** Use Firebase Storage with one JPEG at
+  `profilePhotos/{uid}/profile.jpg`, an upload-size limit of 5 MB, and rules
+  limiting writes to the authenticated owner. Store the download URL on the
+  Firestore user profile and linked player record.
+- **Reason:** The app already uses Firebase Auth and Firestore, and Storage
+  provides object storage with Firebase Authentication rules.
+- **Trade-offs:** Storage must be enabled and its rules deployed in the Firebase
+  project. Existing seeded roster entries need a verified Auth UID link before
+  their account photo can appear in the ladder. Firebase plan or billing
+  requirements must be checked by the project owner.

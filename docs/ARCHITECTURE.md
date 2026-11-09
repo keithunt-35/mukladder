@@ -2,8 +2,8 @@
 
 ## Status
 
-This document describes the target architecture and the currently verified
-baseline. Firebase and feature modules are not yet implemented.
+This document describes the implemented Flutter/Firebase baseline and the
+remaining trusted-backend work.
 
 ## Client structure
 
@@ -16,9 +16,9 @@ Organize `lib/` by feature, with these responsibilities:
 - `features/<feature>/domain/`: models, validation and pure business rules.
 - `features/<feature>/data/`: repositories, Firestore access and mapping.
 
-The current foundation uses Riverpod for dependency injection/state access and
-`go_router` for declarative navigation. The main shell currently exposes the
-ladder and profile destinations.
+The app uses Riverpod for state access and `go_router` for declarative
+navigation. The main shell exposes the ladder, profile, challenges and alerts;
+Admin and Treasurer workspaces are role-guarded.
 
 Expected feature areas are auth, players, ladder, challenges, results,
 notifications, admin and treasurer. Do not create empty structure without a
@@ -26,33 +26,53 @@ feature need.
 
 ## Data flow
 
-The UI invokes application workflows. Workflows validate input and use domain
-logic, then call repositories. Repositories read/write Firebase services and
-map external data to domain models. Rule-sensitive mutations are sent to
-trusted backend functions or transactions; the client never directly changes
-official rankings.
+The UI invokes application workflows and repositories map Firebase data to
+domain models. The ladder subscribes to Firestore `rankings` snapshots, which
+allows the UI to reflect server updates without a hardcoded in-app player list.
+The current 24-player development seed is still a static starting dataset.
+Trusted backend functions for rule-sensitive ranking and administrative
+mutations have not yet been implemented; do not present local calculations as
+official.
 
 ## Backend responsibilities
 
 - Firebase Auth authenticates users.
-- Firestore stores player, challenge, result, ranking, notification and audit
-  data.
-- Cloud Functions perform privileged ranking changes, deadline handling,
-  cooldowns, inactivity penalties and notifications.
+- Firestore stores player profiles (including photo download URLs), challenge,
+  result, ranking, notification and audit data.
+- Firebase Storage holds JPEG profile photos at
+  `profilePhotos/{uid}/profile.jpg`. Storage rules restrict uploads and
+  replacements to that authenticated owner and allow signed-in players to view
+  ladder photos.
+- Cloud Functions are the planned authority for privileged ranking changes,
+  deadline handling, cooldowns, inactivity penalties and notifications; these
+  workflows remain outstanding.
 - Firestore Security Rules enforce authentication, ownership and role
   boundaries.
 - Scheduled operations must be idempotent and safe to retry.
 
 ## Authentication and authorization
 
-Authentication will use Firebase Auth. Roles are stored and enforced through a
-trusted administrative workflow and backend security rules, not a role supplied
-by the client. Admin and Treasurer capabilities must be checked separately.
+Authentication uses Firebase Auth. App roles are loaded from the user's
+Firestore profile and the UI checks roles separately for Admin and Treasurer
+screens. Backend rules remain the security boundary; a client-side role check
+is not sufficient authorization.
 
-Until Firebase Auth is configured, the application uses an explicitly
-temporary `AuthService` interface with a `DemoAuthService` implementation.
-Feature code reads the current user through that interface so the demo identity
-can later be replaced without rewriting screens.
+Sign-up optionally selects a photo from the device gallery, resizes it to a
+maximum 512-by-512 image and uploads it to the authenticated user's Storage
+path. The resulting download URL and Storage path are recorded in the Firestore
+user profile and player document; image bytes belong in Storage, not a
+Firestore document.
+Existing players can change their photo from Profile. The ladder merges ordered
+ranking documents with player documents and refreshes when either collection
+changes. Existing seeded players must have a matching player document linked to
+their Auth UID (`userId`) before their uploaded photo is associated with that
+ranking entry.
+
+The Profile match history reads the signed-in user's challenges, fetches the
+associated result records and resolves opponent names from player documents.
+It displays the reported match score and confirmation state. No authoritative
+ladder-point total is calculated because the trusted ranking workflow and
+confirmed 2026 scoring rules are not implemented.
 
 ## Offline strategy
 
@@ -66,6 +86,7 @@ insufficient.
 ## Rule engine
 
 Ranking and challenge rules belong in pure Dart functions/classes with explicit
-inputs and outputs. They must be testable without Flutter rendering or a live
-Firebase project. The exact algorithm and timing conditions require verification
-against the official rulebook before implementation.
+inputs and outputs. The existing ranking calculator is explicitly provisional
+and only supports local demonstration logic. Verify the complete official
+rulebook before implementing authoritative game outcomes. Ranking writes must
+be performed by a trusted server transaction.

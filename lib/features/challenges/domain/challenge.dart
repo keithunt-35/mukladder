@@ -18,6 +18,7 @@ class Challenge {
     required this.status,
     required this.createdAt,
     this.proposedDate,
+    this.alternativeDate,
   }) : assert(id != ''),
        assert(challengerId != ''),
        assert(challengedId != ''),
@@ -30,6 +31,7 @@ class Challenge {
   final ChallengeStatus status;
   final DateTime createdAt;
   final DateTime? proposedDate;
+  final DateTime? alternativeDate;
 
   Challenge transitionTo(ChallengeStatus nextStatus) {
     if (!_allowedTransitions[status]!.contains(nextStatus)) {
@@ -46,6 +48,7 @@ class Challenge {
       status: nextStatus,
       createdAt: createdAt,
       proposedDate: proposedDate,
+      alternativeDate: alternativeDate,
     );
   }
 

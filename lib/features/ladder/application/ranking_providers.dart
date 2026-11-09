@@ -14,8 +14,8 @@ final rankingRepositoryProvider = Provider<RankingRepository>((ref) {
   return FirestoreRankingRepository();
 });
 
-final rankingProvider = FutureProvider<List<RankingEntry>>((ref) {
-  return ref.watch(rankingRepositoryProvider).getRanking();
+final rankingProvider = StreamProvider<List<RankingEntry>>((ref) {
+  return ref.watch(rankingRepositoryProvider).watchRanking();
 });
 
 final demoRankingEntries = <RankingEntry>[

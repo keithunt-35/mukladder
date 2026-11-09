@@ -18,4 +18,9 @@ class InMemoryRankingRepository implements RankingRepository {
 
     return _entries;
   }
+
+  @override
+  Stream<List<RankingEntry>> watchRanking() async* {
+    yield await getRanking();
+  }
 }
