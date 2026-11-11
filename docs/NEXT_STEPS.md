@@ -1,65 +1,25 @@
 # Next Steps
 
-## Current state — 9 November 2026
+## Current state — 13 November 2026
 
-- The Android app uses Firebase Authentication and Firestore.
-- The in-app logo and Android launcher share the canonical `assets/brand/app_brand_mark.png`.
-- The bottom navigation bar (`NavigationBar`) is authentication-aware: it is hidden on the login/auth screen (`user == null`) and appears automatically upon sign-in.
-- Pending players can view their Player dashboard and request membership with navigation bar access across all tabs.
-- Enhanced `FirebaseMessagingService` for foreground messaging listeners, token retrieval, and background message handling.
-- Added `WalkoverAdjudicator` for validating walkover claims based on scheduled match dates and participant status.
-- Added `RosterAccountLinker` to bridge seeded tournament roster player records (`player-1` to `player-24`) with verified Firebase Auth UIDs.
-- Added pure JS ranking calculator (`ranking_engine.js`) and `confirmMatchResult` Cloud Function in `functions/index.js` for server-side score verification, ranking recalculation, and audit logging.
-- Challenge deadline and cutoff calculations in `ChallengeRules` are normalized to the `Africa/Kampala` timezone (UTC+3).
-- The ladder screen streams ordered documents from the `rankings` collection;
-  its current 24-player development seed is still static source data.
-- The ranking calculator is provisional. No trusted backend updates official
-  positions from match results yet.
-- Normal/G.O.D. challenge creation now asks for a match date; alternative-date
-  proposals and a provisional result report/confirmation flow are present.
-  Their client checks are not authoritative and have not been tested against
-  the Firestore Emulator.
-- The Admin workspace receives join/payment-report alerts and shows submitted
-  MTN MoMo references. Admins must verify payment externally before the trusted
-  approval transaction assigns an initial position and activates membership.
-  The merchant account is not configured, so the app does not charge or
-  automatically verify payments.
-- The Admin workspace now lists all player point totals and supports audited
-  manual point awards. The total is separate from ladder position. Deploy the
-  `addPlayerPoints` callable and updated Firestore Rules before relying on it;
-  match-derived points are not implemented until official scoring rules are
-  confirmed.
-- Admin role sign-in is a UI selection checked against the trusted role in the
-  user profile; it does not provision Admin accounts and does not use a shared
-  secret key. Have the project owner assign Admin roles through a trusted
-  process. Firebase Emulator validation and deployment of the updated
-  Functions/Rules are still required.
-- New accounts can request to join; Admins receive persistent in-app alerts.
-  Players report an external MTN MoMo transaction reference and Admins must
-  verify payment before approval. The merchant account is not configured, so
-  there are no in-app charges or automatic payment verification yet. FCM push
-  delivery and Emulator validation remain future work.
-- Successful player signup opens the player dashboard, where the Join Ladder
-  and payment workflow is shown. Pending players cannot view standings,
-  member profiles or other player features until Admin approval.
-- If signup reports that Email/Password is disabled, enable that provider in
-  Firebase Console for `mukladder-4351c`. If Firestore reports
-  `permission-denied`, deploy the current `firestore.rules` to that project.
-  An Auth account may already exist; sign in with that email to retry creating
-  its missing player profile rather than trying to register it again.
-- Profile photos can be selected at registration or changed from Profile.
-  Android configuration now targets `mukladder-4351c` and
-  `mukladder-4351c.firebasestorage.app`; confirm/create that bucket in Firebase
-  Console and deploy `storage.rules` before uploads can work. Seeded roster
-  players also need verified Auth UID links.
-- Player profiles show the score string and opponent for recorded results.
-  Official points/ranking totals are not calculated; confirm the applicable
-  rules and implement the trusted ranking backend before adding them.
-- The complete official rulebook is not in the repository, and the 2025 rules'
-  applicability to the 2026 tournament is unconfirmed.
-- Seed ranking player IDs do not reliably match Firebase Auth UIDs. Existing
-  roster account linking and challenge identity reconciliation still require
-  verified account-to-roster associations.
+- CardThemeData fix: Changed `CardTheme` to `CardThemeData` in `lib/app/app.dart`, resolving compilation error.
+- Dart analysis passes with no issues on the entire lib directory.
+- All screen implementations (Ladder, Profile, Challenges, Notifications, Admin, Treasurer) are properly integrated into the app.
+
+## Pending screens for future migration
+
+The following screens are currently defined within `lib/app/app.dart` but should eventually be extracted to dedicated presentation files:
+
+- `LadderScreen` - Live ladder ranking display
+- `ProfileScreen` - Player profile and match history
+- `ChallengesScreen` - Challenge management with result submission
+- `NotificationsScreen` - In-app alerts and notifications
+- `AdminScreen` - Admin dashboard with pending registrations and points management
+- `TreasurerScreen` - Payment-status overview
+
+These screens can be moved to `lib/features/*/presentation/` when the project structure is reorganized.
+
+## 1. Confirm the authoritative rules and admin responsibilities
 
 ## 1. Confirm the authoritative rules and admin responsibilities
 

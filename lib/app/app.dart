@@ -115,7 +115,7 @@ class _MukladderAppState extends ConsumerState<MukladderApp>
           elevation: 0,
           scrolledUnderElevation: 0,
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           elevation: 0,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),

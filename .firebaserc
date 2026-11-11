@@ -1,6 +1,7 @@
 {
   "projects": {
-    "development": "mukladder-4351c"
+    "development": "mukladder-4351c",
+    "default": "mukladder"
   },
   "targets": {},
   "etags": {}
