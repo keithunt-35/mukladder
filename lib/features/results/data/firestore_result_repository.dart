@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../challenges/data/challenge_repository.dart';
@@ -12,10 +13,13 @@ class FirestoreResultRepository implements ResultRepository {
   FirestoreResultRepository({
     required this.challengeRepository,
     FirebaseFirestore? firestore,
-  }) : _firestore = firestore ?? FirebaseFirestore.instance;
+    FirebaseFunctions? functions,
+  }) : _firestore = firestore ?? FirebaseFirestore.instance,
+       _functions = functions ?? FirebaseFunctions.instance;
 
   final ChallengeRepository challengeRepository;
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
 
   @override
   Future<List<MatchResult>> getResults() async {
@@ -113,6 +117,24 @@ class FirestoreResultRepository implements ResultRepository {
     if (signedInUserId == null || signedInUserId != actorId) {
       throw StateError('The signed-in user must review this result.');
     }
+
+    // Confirmed results must go through the trusted Cloud Function so ranking,
+    // cooldown and audit updates stay server-authoritative.
+    if (status == ResultStatus.confirmed) {
+      try {
+        await _functions.httpsCallable('confirmMatchResult').call({
+          'resultId': resultId,
+        });
+      } on FirebaseFunctionsException catch (error) {
+        throw StateError(error.message ?? 'Unable to confirm this result.');
+      }
+      return _get(resultId);
+    }
+
+    if (status != ResultStatus.disputed) {
+      throw StateError('Unsupported result transition.');
+    }
+
     final resultReference = _firestore.collection('results').doc(resultId);
     MatchResult? updated;
     await _firestore.runTransaction((transaction) async {
@@ -136,7 +158,7 @@ class FirestoreResultRepository implements ResultRepository {
       }
       if (actorId == current.submittedBy) {
         throw StateError(
-          'The result submitter cannot confirm their own score.',
+          'The result submitter cannot dispute their own score.',
         );
       }
       final next = current.transitionTo(status);
@@ -146,12 +168,6 @@ class FirestoreResultRepository implements ResultRepository {
         'reviewedBy': actorId,
         'reviewedAt': FieldValue.serverTimestamp(),
       });
-      if (status == ResultStatus.confirmed) {
-        transaction.update(challengeReference, {
-          'status': ChallengeStatus.completed.name,
-          'completedAt': FieldValue.serverTimestamp(),
-        });
-      }
       updated = next;
     });
     return updated!;

@@ -63,13 +63,13 @@ members. Admin/Treasurer roles are assigned by the project owner; the app does
 not use a shared client-side Admin key.
 
 The full official MUK Ladder Rules, 2025 document is not in the repository,
-and its applicability to the 2026 tournament is unconfirmed. The provisional
-Dart ranking calculator is not authoritative. Trusted backend match-result
-ranking transitions and Emulator Suite security tests remain unimplemented.
-The membership/points functions and Firestore rules have not yet been
-Emulator-tested or deployed. Firebase Android app configuration now targets
-project `mukladder-4351c`; backend services still require provisioning. Do not
-treat the seeded positions or client-side demo logic as official game outcomes.
+and its applicability to the 2026 tournament is unconfirmed. Confirmed match results now update rankings through the trusted
+`confirmMatchResult` Cloud Function (with winner cooldown and audit). The
+provisional Dart ranking calculator remains for offline/demo tests only.
+Emulator Suite security tests and production deploy of the updated functions /
+Firestore rules are still outstanding. Firebase Android app configuration
+targets project `mukladder-4351c`. Do not treat undeployed local function code
+as live until the owner deploys it.
 
 ## Working technology direction
 

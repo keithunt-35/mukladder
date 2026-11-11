@@ -1,1 +1,57 @@
-{"functions":{"source":"functions","codebase":"default","ignore":["node_modules",".git","firebase-debug.log","firebase-debug.*.log"]},"flutter":{"platforms":{"android":{"default":{"projectId":"mukladder-4351c","appId":"1:839117866563:android:6377746785834e600136f6","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"mukladder-4351c","configurations":{"android":"1:839117866563:android:6377746785834e600136f6"}}}}},"firestore":{"rules":"firestore.rules"},"storage":{"rules":"storage.rules"}}
+{
+  "functions": {
+    "source": "functions",
+    "codebase": "default",
+    "ignore": [
+      "node_modules",
+      ".git",
+      "firebase-debug.log",
+      "firebase-debug.*.log",
+      "*.test.js"
+    ]
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "mukladder-4351c",
+          "appId": "1:839117866563:android:6377746785834e600136f6",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "mukladder-4351c",
+          "configurations": {
+            "android": "1:839117866563:android:6377746785834e600136f6"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "functions": {
+      "port": 5001
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "storage": {
+      "port": 9199
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    },
+    "singleProjectMode": true
+  }
+}

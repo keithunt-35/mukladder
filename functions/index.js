@@ -1,6 +1,7 @@
 const { initializeApp } = require('firebase-admin/app');
 const { FieldValue, getFirestore } = require('firebase-admin/firestore');
 const { HttpsError, onCall } = require('firebase-functions/v2/https');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
 
 const {
   calculatePositionsAfterInsertion,
@@ -14,6 +15,9 @@ const {
   calculateMatchWinner,
   calculateNewRankings,
 } = require('./ranking_engine');
+const {
+  calculateInactivityDrops,
+} = require('./inactivity_plan');
 
 initializeApp();
 const firestore = getFirestore();
@@ -565,6 +569,13 @@ exports.addPlayerPoints = onCall(async (request) => {
   });
 });
 
+function rankingPlayerId(document) {
+  const data = document.data() ?? {};
+  return typeof data.playerId === 'string' && data.playerId.length > 0
+    ? data.playerId
+    : document.id;
+}
+
 exports.confirmMatchResult = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Sign in to confirm match result.');
@@ -587,7 +598,11 @@ exports.confirmMatchResult = onCall(async (request) => {
     const resultData = resultSnapshot.data();
     if (resultData.status !== 'submitted') {
       if (resultData.status === 'confirmed') {
-        return { confirmed: true, duplicate: true };
+        return {
+          confirmed: true,
+          duplicate: true,
+          winner: resultData.winnerSide ?? null,
+        };
       }
       throw new HttpsError(
         'failed-precondition',
@@ -614,6 +629,12 @@ exports.confirmMatchResult = onCall(async (request) => {
       throw new HttpsError('not-found', 'Associated challenge not found.');
     }
     const challengeData = challengeSnapshot.data();
+    if (challengeData.status !== 'accepted') {
+      throw new HttpsError(
+        'failed-precondition',
+        'Only accepted challenges can have confirmed results.',
+      );
+    }
     if (
       reviewerId !== challengeData.challengerId &&
       reviewerId !== challengeData.challengedId
@@ -630,33 +651,125 @@ exports.confirmMatchResult = onCall(async (request) => {
       );
     }
 
-    const winner = calculateMatchWinner(resultData.score);
+    let winner;
+    try {
+      winner = calculateMatchWinner(resultData.score);
+    } catch (error) {
+      throw new HttpsError('invalid-argument', error.message);
+    }
+
+    const rankingDocsByPlayerId = new Map();
     const currentPositions = {};
     for (const doc of rankingsSnapshot.docs) {
-      currentPositions[doc.id] = doc.data().position;
-    }
-
-    const newPositions = calculateNewRankings({
-      currentPositions,
-      challengerId: challengeData.challengerId,
-      challengedId: challengeData.challengedId,
-      challengeType: challengeData.type,
-      winner,
-    });
-
-    for (const doc of rankingsSnapshot.docs) {
-      const nextPos = newPositions[doc.id];
-      if (nextPos !== undefined && nextPos !== doc.data().position) {
-        transaction.update(doc.ref, { position: nextPos });
+      const position = doc.data().position;
+      if (!Number.isInteger(position)) {
+        throw new HttpsError(
+          'failed-precondition',
+          'The ladder has invalid positions. Reconcile it before confirming.',
+        );
       }
+      const playerId = rankingPlayerId(doc);
+      if (currentPositions[playerId] !== undefined) {
+        throw new HttpsError(
+          'failed-precondition',
+          'Duplicate ranking entries were found. Reconcile the ladder first.',
+        );
+      }
+      currentPositions[playerId] = position;
+      rankingDocsByPlayerId.set(playerId, doc);
     }
+
+    if (
+      !rankingDocsByPlayerId.has(challengeData.challengerId) ||
+      !rankingDocsByPlayerId.has(challengeData.challengedId)
+    ) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Both match participants must have ladder ranking entries.',
+      );
+    }
+
+    let newPositions;
+    try {
+      newPositions = calculateNewRankings({
+        currentPositions,
+        challengerId: challengeData.challengerId,
+        challengedId: challengeData.challengedId,
+        challengeType: challengeData.type,
+        winner,
+      });
+    } catch (error) {
+      throw new HttpsError('failed-precondition', error.message);
+    }
+
+    const winnerId =
+      winner === 'challenger'
+        ? challengeData.challengerId
+        : challengeData.challengedId;
+    const beforePositions = {
+      [challengeData.challengerId]:
+        currentPositions[challengeData.challengerId],
+      [challengeData.challengedId]:
+        currentPositions[challengeData.challengedId],
+    };
+    const afterPositions = {
+      [challengeData.challengerId]: newPositions[challengeData.challengerId],
+      [challengeData.challengedId]: newPositions[challengeData.challengedId],
+    };
+
+    for (const [playerId, nextPos] of Object.entries(newPositions)) {
+      const doc = rankingDocsByPlayerId.get(playerId);
+      if (!doc) {
+        continue;
+      }
+      const previous = doc.data();
+      if (nextPos === previous.position) {
+        continue;
+      }
+      transaction.update(doc.ref, {
+        position: nextPos,
+        effectiveAt: FieldValue.serverTimestamp(),
+        sourceResultId: resultId,
+        version: (Number.isInteger(previous.version) ? previous.version : 0) + 1,
+      });
+    }
+
+    const challengerPlayerReference = firestore
+      .collection('players')
+      .doc(challengeData.challengerId);
+    const challengedPlayerReference = firestore
+      .collection('players')
+      .doc(challengeData.challengedId);
+
+    transaction.update(challengerPlayerReference, {
+      lastChallengeAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(winnerId === challengeData.challengerId
+        ? { cooldownStartedAt: FieldValue.serverTimestamp() }
+        : {}),
+    });
+    transaction.update(challengedPlayerReference, {
+      lastChallengeAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      ...(winnerId === challengeData.challengedId
+        ? { cooldownStartedAt: FieldValue.serverTimestamp() }
+        : {}),
+    });
 
     const revision = ladderStateSnapshot.exists
       ? ladderStateSnapshot.data()?.revision ?? 0
       : 0;
+    if (!Number.isInteger(revision) || revision < 0) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Ladder state is invalid. Ask an administrator to reconcile it.',
+      );
+    }
 
     transaction.update(resultReference, {
       status: 'confirmed',
+      winnerSide: winner,
+      winnerId,
       reviewedBy: reviewerId,
       reviewedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -674,23 +787,158 @@ exports.confirmMatchResult = onCall(async (request) => {
       },
       { merge: true },
     );
+
+    const submitterNotification = firestore.collection('notifications').doc();
+    const reviewerNotification = firestore.collection('notifications').doc();
+    transaction.create(submitterNotification, {
+      recipientId: resultData.submittedBy,
+      type: 'matchResultConfirmed',
+      title: 'Result confirmed',
+      body: 'Your opponent confirmed the match score. The ladder has been updated.',
+      entityId: resultId,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    transaction.create(reviewerNotification, {
+      recipientId: reviewerId,
+      type: 'matchResultConfirmed',
+      title: 'Result recorded',
+      body: 'You confirmed the match score. The ladder has been updated.',
+      entityId: resultId,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
     transaction.create(auditReference, {
       actorId: reviewerId,
       actorRole: 'player',
       eventType: 'matchResultConfirmed',
       entityType: 'result',
       entityId: resultId,
-      before: { status: 'submitted' },
+      before: {
+        status: 'submitted',
+        positions: beforePositions,
+      },
       after: {
         status: 'confirmed',
         winner,
+        winnerId,
         score: resultData.score,
         challengeId: resultData.challengeId,
+        positions: afterPositions,
+        cooldownStartedFor: winnerId,
       },
-      reason: 'Opponent confirmed the match result score.',
+      reason: 'Opponent confirmed the match result; trusted ranking update applied.',
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    return { confirmed: true, duplicate: false, winner };
+    return {
+      confirmed: true,
+      duplicate: false,
+      winner,
+      winnerId,
+      positions: afterPositions,
+    };
   });
 });
+
+exports.applyInactivityDrops = onSchedule(
+  {
+    schedule: 'every day 00:15',
+    timeZone: 'Africa/Kampala',
+  },
+  async () => {
+    const ladderStateReference = firestore
+      .collection('system')
+      .doc('ladderState');
+    const auditReference = firestore.collection('auditEvents').doc();
+
+    await firestore.runTransaction(async (transaction) => {
+      const [rankingsSnapshot, playersSnapshot, ladderStateSnapshot] =
+        await Promise.all([
+          transaction.get(firestore.collection('rankings')),
+          transaction.get(firestore.collection('players')),
+          transaction.get(ladderStateReference),
+        ]);
+
+      const playersById = new Map();
+      for (const doc of playersSnapshot.docs) {
+        playersById.set(doc.id, doc.data());
+      }
+
+      const rankingDocsByPlayerId = new Map();
+      const currentPositions = {};
+      const lastChallengeAtByPlayerId = {};
+      for (const doc of rankingsSnapshot.docs) {
+        const position = doc.data().position;
+        if (!Number.isInteger(position)) {
+          throw new Error('Invalid ranking positions during inactivity job.');
+        }
+        const playerId = rankingPlayerId(doc);
+        currentPositions[playerId] = position;
+        rankingDocsByPlayerId.set(playerId, doc);
+        const player = playersById.get(playerId);
+        if (player?.active === false) {
+          continue;
+        }
+        const stamp = player?.lastChallengeAt ?? player?.lastActivityAt ?? null;
+        if (stamp && typeof stamp.toDate === 'function') {
+          lastChallengeAtByPlayerId[playerId] = stamp.toDate();
+        } else if (stamp instanceof Date) {
+          lastChallengeAtByPlayerId[playerId] = stamp;
+        }
+      }
+
+      const asOf = new Date();
+      const planned = calculateInactivityDrops({
+        currentPositions,
+        lastChallengeAtByPlayerId,
+        asOf,
+      });
+
+      if (Object.keys(planned.changedPlayerIds).length === 0) {
+        return;
+      }
+
+      for (const [playerId, nextPos] of Object.entries(planned.positions)) {
+        const doc = rankingDocsByPlayerId.get(playerId);
+        if (!doc || nextPos === doc.data().position) {
+          continue;
+        }
+        const previous = doc.data();
+        transaction.update(doc.ref, {
+          position: nextPos,
+          effectiveAt: FieldValue.serverTimestamp(),
+          sourceResultId: null,
+          version: (Number.isInteger(previous.version) ? previous.version : 0) + 1,
+        });
+      }
+
+      const revision = ladderStateSnapshot.exists
+        ? ladderStateSnapshot.data()?.revision ?? 0
+        : 0;
+      transaction.set(
+        ladderStateReference,
+        {
+          revision: revision + 1,
+          updatedAt: FieldValue.serverTimestamp(),
+          lastInactivityRunAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      transaction.create(auditReference, {
+        actorId: 'system',
+        actorRole: 'system',
+        eventType: 'inactivityDropsApplied',
+        entityType: 'ladder',
+        entityId: 'rankings',
+        before: { positions: currentPositions },
+        after: {
+          positions: planned.positions,
+          changedPlayerIds: planned.changedPlayerIds,
+        },
+        reason:
+          'Provisional Rule 10 job: one position drop per seven inactive days.',
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+  },
+);

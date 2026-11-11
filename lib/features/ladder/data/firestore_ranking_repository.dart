@@ -96,6 +96,7 @@ class FirestoreRankingRepository implements RankingRepository {
         photoUrl:
             playerData['photoUrl'] as String? ?? player['photoUrl'] as String?,
         lastActivityAt: _dateFrom(playerData['lastActivityAt']),
+        cooldownStartedAt: _dateFrom(playerData['cooldownStartedAt']),
         paymentStatus: switch (playerData['paymentStatus']) {
           'pending' => PaymentStatus.pending,
           'paid' => PaymentStatus.paid,

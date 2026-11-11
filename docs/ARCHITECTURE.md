@@ -60,9 +60,11 @@ document changes.
   replacements to that authenticated owner and allow signed-in players to view
   ladder photos.
 - Cloud Functions are the authority for join/payment reports, registration
-  approval, manual points and initial ranking placement. Match-result ranking
-  changes, deadline handling,
-  cooldowns, inactivity penalties and notifications remain outstanding.
+  approval, manual points, initial ranking placement, and confirmed match
+  results (ranking mutation, winner cooldown stamp, participant
+  `lastChallengeAt`, in-app notifications and audit). A daily Kampala-time
+  scheduled job applies provisional Rule 10 inactivity drops. Result-deadline
+  auto-nullification and FCM fan-out from every state change remain incomplete.
 - Firestore Security Rules enforce authentication, ownership and role
   boundaries.
 - Scheduled operations must be idempotent and safe to retry.

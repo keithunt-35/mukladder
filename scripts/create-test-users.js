@@ -1,198 +1,199 @@
 /**
- * Script to create test users in Firebase Emulator
- * 
- * Run: node scripts/create-test-users.js
- * 
+ * Create Auth users + Firestore profiles in the Firebase Emulator.
+ *
  * Prerequisites:
- * - Firebase Emulator must be running: firebase emulators:start
- * - This script uses the emulator's ports (localhost:8080 for Firestore)
+ *   firebase emulators:start --project mukladder-4351c
+ *
+ * Run:
+ *   node scripts/create-test-users.js
  */
 
-const admin = require('firebase-admin');
+process.env.FIRESTORE_EMULATOR_HOST =
+  process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080';
+process.env.FIREBASE_AUTH_EMULATOR_HOST =
+  process.env.FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1:9099';
 
-// Emulator configuration
-const emulatorHost = 'localhost';
-const emulatorFirestorePort = 8080;
-const emulatorAuthPort = 9099;
+const { createRequire } = require('node:module');
+const path = require('node:path');
+const requireFromFunctions = createRequire(
+  path.join(__dirname, '..', 'functions', 'package.json'),
+);
 
-async function main() {
+const { initializeApp } = requireFromFunctions('firebase-admin/app');
+const { getAuth } = requireFromFunctions('firebase-admin/auth');
+const { FieldValue, getFirestore } = requireFromFunctions(
+  'firebase-admin/firestore',
+);
+
+const projectId = 'mukladder-4351c';
+
+initializeApp({ projectId });
+const auth = getAuth();
+const db = getFirestore();
+
+const testUsers = [
+  {
+    email: 'admin@mukladder.test',
+    password: 'admin123',
+    displayName: 'Ladder Admin',
+    role: 'admin',
+    registrationStatus: 'approved',
+    joinRequestStatus: 'approved',
+    paymentStatus: 'paid',
+    ladderPosition: null,
+  },
+  {
+    email: 'treasurer@mukladder.test',
+    password: 'treasurer123',
+    displayName: 'Treasurer',
+    role: 'treasurer',
+    registrationStatus: 'approved',
+    joinRequestStatus: 'approved',
+    paymentStatus: 'paid',
+    ladderPosition: null,
+  },
+  {
+    email: 'player1@mukladder.test',
+    password: 'player123',
+    displayName: 'Player One',
+    role: 'player',
+    registrationStatus: 'approved',
+    joinRequestStatus: 'approved',
+    paymentStatus: 'paid',
+    ladderPosition: 1,
+  },
+  {
+    email: 'player2@mukladder.test',
+    password: 'player123',
+    displayName: 'Player Two',
+    role: 'player',
+    registrationStatus: 'approved',
+    joinRequestStatus: 'approved',
+    paymentStatus: 'paid',
+    ladderPosition: 2,
+  },
+  {
+    email: 'player3@mukladder.test',
+    password: 'player123',
+    displayName: 'Player Three',
+    role: 'player',
+    registrationStatus: 'approved',
+    joinRequestStatus: 'approved',
+    paymentStatus: 'paid',
+    ladderPosition: 3,
+  },
+  {
+    email: 'player4@mukladder.test',
+    password: 'player123',
+    displayName: 'Player Four',
+    role: 'player',
+    registrationStatus: 'approved',
+    joinRequestStatus: 'approved',
+    paymentStatus: 'paid',
+    ladderPosition: 4,
+  },
+  {
+    email: 'pending@mukladder.test',
+    password: 'player123',
+    displayName: 'Pending Player',
+    role: 'player',
+    registrationStatus: 'pending',
+    joinRequestStatus: 'requested',
+    paymentStatus: 'pending',
+    ladderPosition: null,
+  },
+];
+
+async function upsertUser(userData) {
+  let userRecord;
   try {
-    // Initialize Admin SDK for emulator
-    const serviceAccount = {
-      projectId: 'mukladder',
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY,
-    };
-
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      projectId: 'mukladder',
-      host: emulatorHost,
-      port: emulatorFirestorePort,
+    userRecord = await auth.createUser({
+      email: userData.email,
+      password: userData.password,
+      displayName: userData.displayName,
     });
-
-    const db = admin.firestore();
-    const auth = admin.auth();
-
-    // Test user data
-    const testUsers = [
-      // Admin user
-      {
-        email: 'admin@mukladder.test',
-        password: 'admin123',
-        displayName: 'Ladder Admin',
-        role: 'admin',
-        status: 'active',
-        registrationStatus: 'approved',
-        joinRequestStatus: 'approved',
-        paymentStatus: 'paid',
-      },
-      // Treasurer user
-      {
-        email: 'treasurer@mukladder.test',
-        password: 'treasurer123',
-        displayName: 'Treasurer',
-        role: 'treasurer',
-        status: 'active',
-        registrationStatus: 'approved',
-        joinRequestStatus: 'approved',
-        paymentStatus: 'paid',
-      },
-      // Player users
-      {
-        email: 'player1@mukladder.test',
-        password: 'player123',
-        displayName: 'Player One',
-        role: 'player',
-        status: 'active',
-        registrationStatus: 'approved',
-        joinRequestStatus: 'approved',
-        paymentStatus: 'paid',
-      },
-      {
-        email: 'player2@mukladder.test',
-        password: 'player123',
-        displayName: 'Player Two',
-        role: 'player',
-        status: 'active',
-        registrationStatus: 'approved',
-        joinRequestStatus: 'approved',
-        paymentStatus: 'paid',
-      },
-      {
-        email: 'player3@mukladder.test',
-        password: 'player123',
-        displayName: 'Player Three',
-        role: 'player',
-        status: 'active',
-        registrationStatus: 'approved',
-        joinRequestStatus: 'approved',
-        paymentStatus: 'paid',
-      },
-      // Pending registration user (for testing join workflow)
-      {
-        email: 'pending@mukladder.test',
-        password: 'player123',
-        displayName: 'Pending Player',
-        role: 'player',
-        status: 'active',
-        registrationStatus: 'pending',
-        joinRequestStatus: 'requested',
-        paymentStatus: 'pending',
-      },
-    ];
-
-    console.log('Creating test users...');
-
-    for (const userData of testUsers) {
-      try {
-        // Create Auth user
-        const userRecord = await auth.createUser({
-          email: userData.email,
-          password: userData.password,
-          displayName: userData.displayName,
-        });
-
-        console.log(`Created Auth user: ${userData.email} (UID: ${userRecord.uid})`);
-
-        // Create Firestore user profile
-        await db.collection('users').doc(userRecord.uid).set({
-          uid: userRecord.uid,
-          email: userData.email,
-          displayName: userData.displayName,
-          role: userData.role,
-          status: userData.status,
-          registrationStatus: userData.registrationStatus,
-          joinRequestStatus: userData.joinRequestStatus,
-          paymentStatus: userData.paymentStatus,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        console.log(`Created Firestore profile for ${userData.email}`);
-
-        // Create player document
-        await db.collection('players').doc(userRecord.uid).set({
-          userId: userRecord.uid,
-          displayName: userData.displayName,
-          joinRequestStatus: userData.joinRequestStatus,
-          paymentStatus: userData.paymentStatus,
-          registrationStatus: userData.registrationStatus,
-          active: userData.registrationStatus === 'approved',
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-
-        console.log(`Created player document for ${userData.email}`);
-
-        // Add to rankings if approved
-        if (userData.registrationStatus === 'approved' && userData.role === 'player') {
-          const position = testUsers.indexOf(userData) + 2; // Admin and Treasurer have positions 1 and 2
-          await db.collection('rankings').doc(userRecord.uid).set({
-            playerId: userRecord.uid,
-            position: position,
-            effectiveAt: admin.firestore.FieldValue.serverTimestamp(),
-            sourceResultId: null,
-            version: 1,
-          });
-
-          console.log(`Added ${userData.email} to rankings at position ${position}`);
-        }
-
-        console.log('---');
-      } catch (error) {
-        if (error.code === 'auth/email-already-exists') {
-          console.log(`User ${userData.email} already exists, updating profile...`);
-
-          // Find existing user by email
-          const existingUser = await auth.getUserByEmail(userData.email);
-          
-          // Update Firestore profile
-          await db.collection('users').doc(existingUser.uid).set({
-            role: userData.role,
-            registrationStatus: userData.registrationStatus,
-            joinRequestStatus: userData.joinRequestStatus,
-            paymentStatus: userData.paymentStatus,
-          }, { merge: true });
-
-          console.log(`Updated profile for ${userData.email} (UID: ${existingUser.uid})`);
-        } else {
-          console.error(`Error creating user ${userData.email}:`, error.message);
-        }
-      }
-    }
-
-    console.log('\nTest users created successfully!');
-    console.log('\nLogin credentials:');
-    for (const userData of testUsers) {
-      console.log(`  ${userData.role.toUpperCase()}: ${userData.email} / ${userData.password}`);
-    }
-
-    process.exit(0);
+    console.log(`Created Auth user: ${userData.email} (${userRecord.uid})`);
   } catch (error) {
-    console.error('Fatal error:', error);
-    process.exit(1);
+    if (error.code !== 'auth/email-already-exists') {
+      throw error;
+    }
+    userRecord = await auth.getUserByEmail(userData.email);
+    console.log(`Auth user exists: ${userData.email} (${userRecord.uid})`);
+  }
+
+  const approved = userData.registrationStatus === 'approved';
+  await db.collection('users').doc(userRecord.uid).set(
+    {
+      uid: userRecord.uid,
+      email: userData.email,
+      displayName: userData.displayName,
+      role: userData.role,
+      status: 'active',
+      registrationStatus: userData.registrationStatus,
+      joinRequestStatus: userData.joinRequestStatus,
+      paymentStatus: userData.paymentStatus,
+      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  await db.collection('players').doc(userRecord.uid).set(
+    {
+      userId: userRecord.uid,
+      displayName: userData.displayName,
+      registrationStatus: userData.registrationStatus,
+      joinRequestStatus: userData.joinRequestStatus,
+      paymentStatus: userData.paymentStatus,
+      active: approved && userData.role === 'player',
+      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  if (
+    approved &&
+    userData.role === 'player' &&
+    Number.isInteger(userData.ladderPosition)
+  ) {
+    await db.collection('rankings').doc(userRecord.uid).set({
+      playerId: userRecord.uid,
+      position: userData.ladderPosition,
+      effectiveAt: FieldValue.serverTimestamp(),
+      sourceResultId: null,
+      version: 1,
+    });
+    console.log(
+      `Ranked ${userData.email} at position ${userData.ladderPosition}`,
+    );
   }
 }
 
-main();
+async function main() {
+  console.log(`Seeding emulator project ${projectId}...\n`);
+  await db.collection('system').doc('ladderState').set(
+    {
+      revision: 0,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  for (const userData of testUsers) {
+    await upsertUser(userData);
+  }
+
+  console.log('\n✅ Emulator users ready. Sign in with:');
+  for (const userData of testUsers) {
+    console.log(
+      `  ${userData.role.padEnd(10)} ${userData.email} / ${userData.password}`,
+    );
+  }
+  console.log('\nEmulator UI: http://127.0.0.1:4000');
+}
+
+main().catch((error) => {
+  console.error('❌ Seed failed:', error);
+  process.exit(1);
+});

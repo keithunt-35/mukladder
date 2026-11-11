@@ -177,15 +177,8 @@ service cloud.firestore {
             && getAfter(
               /databases/$(database)/documents/results/$(request.resource.data.resultId)
             ).data.challengeId == challengeId)
-          || (resource.data.status == 'accepted'
-            && request.resource.data.status == 'completed'
-            && request.resource.data.diff(resource.data).affectedKeys()
-              .hasOnly(['status', 'completedAt'])
-            && resource.data.resultId is string
-            && getAfter(
-              /databases/$(database)/documents/results/$(resource.data.resultId)
-            ).data.status == 'confirmed')
         ));
+      // Challenge completion after confirmed results is Cloud Functions only.
       allow delete: if isAdmin();
     }
 
@@ -211,12 +204,14 @@ service cloud.firestore {
         && getAfter(
           /databases/$(database)/documents/challenges/$(request.resource.data.challengeId)
         ).data.resultId == resultId;
+      // Confirmation (and ranking mutation) is Cloud Functions only.
+      // Clients may only dispute a submitted score.
       allow update: if isAdmin()
         || (isApprovedMember(request.auth.uid)
           && isChallengeParticipant(resource.data.challengeId)
           && request.auth.uid != resource.data.submittedBy
           && resource.data.status == 'submitted'
-          && request.resource.data.status in ['confirmed', 'disputed']
+          && request.resource.data.status == 'disputed'
           && request.resource.data.diff(resource.data).affectedKeys()
             .hasOnly(['status', 'updatedAt', 'reviewedBy', 'reviewedAt'])
           && request.resource.data.reviewedBy == request.auth.uid);

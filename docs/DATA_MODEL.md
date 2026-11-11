@@ -4,8 +4,9 @@ This is the MVP domain model and Firestore model. The development project
 contains the initial 24-player and ranking snapshot. Field names and
 rule-sensitive constraints must still be finalized before production use.
 Firestore ranking reads are ordered by position and the app listens for live
-document changes; the seeded ranking is not automatically recalculated after
-game results.
+document changes. Confirmed match results update rankings through the trusted
+`confirmMatchResult` Cloud Function; client confirmation writes are blocked by
+Security Rules.
 
 ## Implemented pure Dart models
 
@@ -16,11 +17,10 @@ game results.
   It rejects invalid state transitions.
 - `MatchResult`: challenge reference, submitting player, score, status and
   submission time. It rejects invalid state transitions.
-- Confirming a result completes its accepted challenge in the local workflow;
-  disputed results remain available for review.
-- Result submission and status transitions create immutable in-memory audit
-  events. The production implementation must write equivalent events in a
-  trusted backend transaction.
+- Confirming a result on Android calls `confirmMatchResult`, which completes the
+  challenge, rewrites ranking positions, stamps the winner cooldown and writes
+  an audit event. Disputed results remain a client transition and do not change
+  rankings.
 
 Firestore repositories are used by the connected app. In-memory repositories
 remain for isolated tests and local domain demonstrations; they are not
@@ -49,10 +49,13 @@ paid and membership approved.
 
 ### `players/{playerId}`
 
-`userId`, `displayName`, `position`, `lastActivityAt`, `registrationStatus`,
-`joinRequestStatus`, `paymentStatus`, `paymentReference`, `photoUrl`, `active`,
-`createdAt`, `updatedAt`.
+`userId`, `displayName`, `position`, `lastActivityAt`, `lastChallengeAt`,
+`cooldownStartedAt`, `registrationStatus`, `joinRequestStatus`,
+`paymentStatus`, `paymentReference`, `photoUrl`, `active`, `createdAt`,
+`updatedAt`.
 The app also stores `photoStoragePath` on linked profile documents.
+`cooldownStartedAt` and `lastChallengeAt` are written only by trusted backend
+transactions after a confirmed match.
 
 Profile photos are stored in Firebase Storage at
 `profilePhotos/{uid}/profile.jpg`. The matching download URL is copied to the
@@ -77,7 +80,8 @@ confirmed scoring rules and a trusted backend.
 ### `results/{resultId}`
 
 `challengeId`, `submittedBy`, `score`, `status`, `submittedAt`,
-`confirmedAt`, `disputedAt`, `reviewedBy`, `reviewedAt`.
+`confirmedAt`, `disputedAt`, `reviewedBy`, `reviewedAt`, optional `winnerSide`
+and `winnerId` after trusted confirmation.
 
 ### `rankings/{rankingId}`
 

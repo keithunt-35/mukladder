@@ -1,106 +1,46 @@
 # Next Steps
 
-## Current state — 13 November 2026
+## Current state — 11 November 2026
 
-- CardThemeData fix: Changed `CardTheme` to `CardThemeData` in `lib/app/app.dart`, resolving compilation error.
-- Dart analysis passes with no issues on the entire lib directory.
-- All screen implementations (Ladder, Profile, Challenges, Notifications, Admin, Treasurer) are properly integrated into the app.
+Trusted match-result confirmation now updates rankings on the server. The
+remaining work is deployment, smoke testing and submission polish — not new
+core features.
 
-## Pending screens for future migration
+## 1. Deploy and smoke-test the ranking path (highest priority)
 
-The following screens are currently defined within `lib/app/app.dart` but should eventually be extracted to dedicated presentation files:
+- Deploy Cloud Functions (`confirmMatchResult`, membership/points functions,
+  `applyInactivityDrops`) and updated `firestore.rules` to `mukladder-4351c`.
+- On two Android accounts: place Normal challenge → accept → submit score →
+  opponent confirms → verify ladder positions, winner cooldown stamp, audit
+  event and in-app notifications.
+- Confirm disputed scores still work and do **not** change rankings.
 
-- `LadderScreen` - Live ladder ranking display
-- `ProfileScreen` - Player profile and match history
-- `ChallengesScreen` - Challenge management with result submission
-- `NotificationsScreen` - In-app alerts and notifications
-- `AdminScreen` - Admin dashboard with pending registrations and points management
-- `TreasurerScreen` - Payment-status overview
+## 2. Confirm remaining rule ambiguities with Ladder Admin / lecturer
 
-These screens can be moved to `lib/features/*/presentation/` when the project structure is reorganized.
+- Obtain the MUK Ladder Rules, 2025 source document.
+- Confirm 2026/2027 applicability of placement windows, G.O.D. consequences and
+  Rule 10 inactivity (currently provisional: one drop per seven days).
+- Confirm Admin vs Treasurer override duties for disputed results and walkovers.
 
-## 1. Confirm the authoritative rules and admin responsibilities
+## 3. Stabilisation for the 26 November submission
 
-## 1. Confirm the authoritative rules and admin responsibilities
+- Tag a release-candidate build once the smoke test passes.
+- Write / rehearse the demo script: join → approve → challenge → result →
+  rank change → admin overview.
+- Finish report draft, architecture diagram and peer-evaluation forms.
+- Do **not** start stretch goals (court booking, SMS, payment gateway).
 
-- Obtain the complete MUK Ladder Rules, 2025 source document.
-- Confirm with the Ladder Admin or lecturer whether those rules govern the
-  2026/2027 tournament and clarify any differing or ambiguous time windows.
-- For the provisional implementation, use the user's confirmed 6 a.m.–8 p.m.
-  challenge-placement window and treat the concept paper as a provisional
-  specification. This does not confirm the official rules for production.
-- Confirm which actions belong to the Ladder Admin and which belong to the
-  Treasurer, including registration, result review, walkovers, ranking
-  corrections and payment-status updates.
-- Do not implement official game outcomes or privileged admin mutations from
-  summaries or assumptions.
+## 4. Optional hardening if time remains
 
-## 2. Implement trusted ranking and result workflows
+- Emulator Suite tests for `confirmMatchResult` authorization and idempotency.
+- Scheduled enforcement of the 8 p.m. result cutoff.
+- FCM push for result-confirmed / cooldown-ended events (in-app notifications
+  already written on confirm).
+- Extract large screens from `lib/app/app.dart` into feature presentation files.
 
-- Translate only confirmed rule clauses into a pure-Dart, independently tested
-  rule engine.
-- Add trusted Cloud Functions or equivalent server transactions for result
-  confirmation, ranking changes, cooldowns, deadlines, walkovers and audit
-  records.
-- First reconcile participant identity by verified `players.userId` links and
-  route challenge/result mutations through authenticated server operations;
-  do not enable official ranking changes from client writes.
-- Configure and test the Firebase Emulator Suite and Firestore rules before
-  enabling official operations.
-- Preserve ranking versions and make scheduled or retried operations
-  idempotent.
+## Registration / membership notes (unchanged)
 
-## 3. Complete the Admin workspace
-
-- Keep client role checks for navigation, but enforce all access and mutations
-  through Firebase Security Rules and trusted backend authorization.
-- Add only the administration workflows approved in step 1.
-- Write an audit event for every privileged change and test forbidden access.
-- Maintain a separate Treasurer view and restrict it to approved payment-status
-  duties.
-
-## 4. Integrate and verify the end-to-end app
-
-- Confirm the development Firebase Storage bucket/plan with the project owner,
-  then deploy the reviewed Storage rules.
-- Verify profile-photo upload and Firestore URL/path persistence with an
-  authenticated Android account after Storage is enabled.
-- The Firebase CLI is not installed here and no Firebase Console changes were
-  made. If Firebase reports `object-not-found`, verify/create the Storage
-  bucket named in the Android Firebase config and deploy `storage.rules`
-  before retrying the upload.
-- Link registered participant accounts to their existing roster player
-  documents using verified identities, not display-name matching.
-
-## Registration approval and activity update — 5 November 2026
-
-- New accounts start without a join request. An Admin manually verifies the
-  UGX 40,000 fee after the player submits an external payment reference, then
-  assigns an initial position in the Admin workspace.
-- The approval uses an atomic Firestore transaction and writes an audit event.
-  Pending accounts are gated from the player experience; user profile updates
-  make that approval visible without signing in again.
-- `lastActivityAt` is written using Firestore server time on sign-in, app
-  resume and every five minutes while foregrounded. The ladder receives those
-  changes from its player-document stream.
-- The debug banner is disabled.
-- Next: test membership/payment functions, `firestore.rules`, and the Admin
-  transaction with the Firebase Emulator Suite, deploy the reviewed rules and
-  functions to the selected `mukladder-4351c` project, and verify with separate
-  Admin, requesting-player and approved-player accounts.
-- Existing ranking records must have consecutive integer positions before an
-  Admin can insert a new member. The Admin transaction rejects gaps or
-  duplicates rather than silently rewriting inconsistent ladder state.
-- The app records a payment reference for manual verification; it does not
-  collect or automatically validate money. Firebase roles, MTN MoMo merchant
-  credentials and production project provisioning remain owner actions.
-- `npm audit --omit=dev` reports six moderate transitive vulnerabilities under
-  the Firebase Admin/Google Cloud dependency tree. `npm audit fix` did not
-  resolve them without breaking-version upgrades; review remediation before
-  production deployment.
-- Replace seed-only ranking setup with backend-generated ranking records
-  derived from verified results.
-- Test online/offline states, authorization and ranking updates on an Android
-  device.
-- Run `flutter analyze`, `flutter test` and a debug Android build after each
-  related implementation batch.
+- New accounts start without a join request. Admin verifies the UGX 40,000 fee
+  after an external payment reference, then assigns an initial position.
+- The app does not collect or automatically validate money.
+- Firebase CLI deploy and production credential steps remain owner actions.

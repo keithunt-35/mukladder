@@ -482,23 +482,36 @@ class LadderScreen extends ConsumerWidget {
         : ref
               .watch(resultsProvider)
               .maybeWhen(data: (items) => items, orElse: () => const []);
-    DateTime? cooldownStartedAt;
-    for (final result in results) {
-      if (result.status != ResultStatus.confirmed) {
-        continue;
-      }
-      final matchingChallenges = challenges.where(
-        (item) => item.id == result.challengeId,
-      );
-      final challenge = matchingChallenges.isEmpty
-          ? null
-          : matchingChallenges.first;
-      if (challenge?.challengerId != user.id) {
-        continue;
-      }
-      if (cooldownStartedAt == null ||
-          result.submittedAt.isAfter(cooldownStartedAt)) {
-        cooldownStartedAt = result.submittedAt;
+    DateTime? cooldownStartedAt = ranking?.maybeWhen(
+      data: (entries) {
+        for (final entry in entries) {
+          if (entry.player.id == user.id) {
+            return entry.player.cooldownStartedAt;
+          }
+        }
+        return null;
+      },
+      orElse: () => null,
+    );
+    // Fallback for older results that pre-date server cooldown stamps.
+    if (cooldownStartedAt == null) {
+      for (final result in results) {
+        if (result.status != ResultStatus.confirmed) {
+          continue;
+        }
+        final matchingChallenges = challenges.where(
+          (item) => item.id == result.challengeId,
+        );
+        final challenge = matchingChallenges.isEmpty
+            ? null
+            : matchingChallenges.first;
+        if (challenge?.challengerId != user.id) {
+          continue;
+        }
+        if (cooldownStartedAt == null ||
+            result.submittedAt.isAfter(cooldownStartedAt)) {
+          cooldownStartedAt = result.submittedAt;
+        }
       }
     }
 
@@ -2543,14 +2556,22 @@ class ChallengesScreen extends ConsumerWidget {
       ref.invalidate(challengesProvider);
       ref.invalidate(rankingProvider);
       if (context.mounted) {
+        final message = status == ResultStatus.confirmed
+            ? 'Result confirmed. Ladder rankings updated.'
+            : 'Result ${status.name}.';
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Result ${status.name}.')));
+            .showSnackBar(SnackBar(content: Text(message)));
       }
     } on StateError catch (error) {
       if (!context.mounted) {
         return;
       }
       _showResultError(context, error.message);
+    } on FirebaseFunctionsException catch (error) {
+      if (!context.mounted) {
+        return;
+      }
+      _showResultError(context, error.message ?? 'Unable to update result.');
     }
   }
 
