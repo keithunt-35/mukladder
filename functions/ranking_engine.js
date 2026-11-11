@@ -59,26 +59,34 @@ function calculateNewRankings({
   if (winner === 'challenger') {
     if (challengeType === 'god') {
       // G.O.D. win: Swap positions
-      const temp = sorted[challengerIndex].id;
-      sorted[challengerIndex].id = sorted[challengedIndex].id;
-      sorted[challengedIndex].id = temp;
+      const tempPos = sorted[challengerIndex].pos;
+      sorted[challengerIndex].pos = sorted[challengedIndex].pos;
+      sorted[challengedIndex].pos = tempPos;
     } else if (challengerIndex > challengedIndex) {
       // Normal win: Challenger moves up to challenged position
       const [challenger] = sorted.splice(challengerIndex, 1);
       sorted.splice(challengedIndex, 0, challenger);
+      // Reassign sequential positions after move
+      sorted.forEach((player, index) => {
+        player.pos = index + 1;
+      });
     }
   } else if (winner === 'challenged') {
     if (challengeType === 'god') {
       // G.O.D. loss: Challenger drops to the bottom of the ladder
       const [challenger] = sorted.splice(challengerIndex, 1);
       sorted.push(challenger);
+      // Reassign sequential positions after move
+      sorted.forEach((player, index) => {
+        player.pos = index + 1;
+      });
     }
     // Normal loss: No position changes
   }
 
   const result = {};
   sorted.forEach((player, index) => {
-    result[player.id] = index + 1;
+    result[player.id] = player.pos;
   });
   return result;
 }
