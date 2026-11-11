@@ -1,6 +1,10 @@
 class ChallengeRules {
   const ChallengeRules._();
 
+  static DateTime toKampalaTime(DateTime date) {
+    return date.toUtc().add(const Duration(hours: 3));
+  }
+
   static void validateNormalPlacement({
     required int challengerPosition,
     required int challengedPosition,
@@ -18,7 +22,9 @@ class ChallengeRules {
         'A Normal challenge may target at most four positions above.',
       );
     }
-    if (requestedAt.hour < 6 || requestedAt.hour >= 20) {
+
+    final localRequested = toKampalaTime(requestedAt);
+    if (localRequested.hour < 6 || localRequested.hour >= 20) {
       throw ArgumentError(
         'Challenges must be placed between 6:00 a.m. and 8:00 p.m.',
       );
@@ -26,15 +32,16 @@ class ChallengeRules {
     if (proposedDate == null) {
       throw ArgumentError('A challenge must include a proposed match date.');
     }
+    final localProposed = toKampalaTime(proposedDate);
     final requestedDay = DateTime(
-      requestedAt.year,
-      requestedAt.month,
-      requestedAt.day,
+      localRequested.year,
+      localRequested.month,
+      localRequested.day,
     );
     final proposedDay = DateTime(
-      proposedDate.year,
-      proposedDate.month,
-      proposedDate.day,
+      localProposed.year,
+      localProposed.month,
+      localProposed.day,
     );
     final daysAhead = proposedDay.difference(requestedDay).inDays;
     if (daysAhead < 1 || daysAhead > 3) {
@@ -48,20 +55,22 @@ class ChallengeRules {
     required DateTime requestedAt,
     required DateTime proposedDate,
   }) {
-    if (requestedAt.hour < 6 || requestedAt.hour >= 20) {
+    final localRequested = toKampalaTime(requestedAt);
+    if (localRequested.hour < 6 || localRequested.hour >= 20) {
       throw ArgumentError(
         'Challenges must be placed between 6:00 a.m. and 8:00 p.m.',
       );
     }
+    final localProposed = toKampalaTime(proposedDate);
     final requestedDay = DateTime(
-      requestedAt.year,
-      requestedAt.month,
-      requestedAt.day,
+      localRequested.year,
+      localRequested.month,
+      localRequested.day,
     );
     final proposedDay = DateTime(
-      proposedDate.year,
-      proposedDate.month,
-      proposedDate.day,
+      localProposed.year,
+      localProposed.month,
+      localProposed.day,
     );
     final daysAhead = proposedDay.difference(requestedDay).inDays;
     if (daysAhead < 1 || daysAhead > 3) {
@@ -75,15 +84,17 @@ class ChallengeRules {
     required DateTime requestedAt,
     required DateTime respondedAt,
   }) {
+    final localRequested = toKampalaTime(requestedAt);
+    final localResponded = toKampalaTime(respondedAt);
     final requestedDay = DateTime(
-      requestedAt.year,
-      requestedAt.month,
-      requestedAt.day,
+      localRequested.year,
+      localRequested.month,
+      localRequested.day,
     );
     final responseDay = DateTime(
-      respondedAt.year,
-      respondedAt.month,
-      respondedAt.day,
+      localResponded.year,
+      localResponded.month,
+      localResponded.day,
     );
     if (responseDay != requestedDay) {
       throw StateError('A challenge must be answered on the placement day.');
@@ -95,20 +106,23 @@ class ChallengeRules {
     required DateTime proposedDate,
     required DateTime alternativeDate,
   }) {
+    final localRequested = toKampalaTime(requestedAt);
+    final localProposed = toKampalaTime(proposedDate);
+    final localAlternative = toKampalaTime(alternativeDate);
     final requestDay = DateTime(
-      requestedAt.year,
-      requestedAt.month,
-      requestedAt.day,
+      localRequested.year,
+      localRequested.month,
+      localRequested.day,
     );
     final alternativeDay = DateTime(
-      alternativeDate.year,
-      alternativeDate.month,
-      alternativeDate.day,
+      localAlternative.year,
+      localAlternative.month,
+      localAlternative.day,
     );
     final currentDay = DateTime(
-      proposedDate.year,
-      proposedDate.month,
-      proposedDate.day,
+      localProposed.year,
+      localProposed.month,
+      localProposed.day,
     );
     final daysAhead = alternativeDay.difference(requestDay).inDays;
     if (daysAhead < 1 || daysAhead > 3 || alternativeDay == currentDay) {
@@ -122,13 +136,19 @@ class ChallengeRules {
     required DateTime matchDate,
     required DateTime submittedAt,
   }) {
-    final matchDay = DateTime(matchDate.year, matchDate.month, matchDate.day);
-    final submissionDay = DateTime(
-      submittedAt.year,
-      submittedAt.month,
-      submittedAt.day,
+    final localMatch = toKampalaTime(matchDate);
+    final localSubmitted = toKampalaTime(submittedAt);
+    final matchDay = DateTime(
+      localMatch.year,
+      localMatch.month,
+      localMatch.day,
     );
-    if (submissionDay != matchDay || submittedAt.hour >= 20) {
+    final submissionDay = DateTime(
+      localSubmitted.year,
+      localSubmitted.month,
+      localSubmitted.day,
+    );
+    if (submissionDay != matchDay || localSubmitted.hour >= 20) {
       throw StateError(
         'Completed results must be received on the match day before 8:00 p.m.',
       );
@@ -139,7 +159,9 @@ class ChallengeRules {
     required DateTime cooldownStartedAt,
     required DateTime requestedAt,
   }) {
-    if (requestedAt.difference(cooldownStartedAt).inDays < 2) {
+    final localCooldown = toKampalaTime(cooldownStartedAt);
+    final localRequested = toKampalaTime(requestedAt);
+    if (localRequested.difference(localCooldown).inDays < 2) {
       throw StateError(
         'The challenger must wait two days before placing another challenge.',
       );

@@ -4,6 +4,28 @@
 
 Phase 5 — Administration and advanced rules preparation.
 
+## Authentication-Aware Navigation Bar (`AppShell`) — 2026-11-09
+
+- Updated `AppShell` in `lib/app/app.dart` to watch `currentUserProvider` and hide the bottom navigation bar (`NavigationBar`) when unauthenticated (`user == null`), ensuring the login/auth screen displays cleanly without navigation tabs.
+
+## Enhanced FCM Push Notification Service (`FirebaseMessagingService`) — 2026-11-09
+
+- Enhanced `FirebaseMessagingService` (`lib/features/notifications/data/firebase_messaging_service.dart`) with foreground message listening, background handler configuration, token retrieval, and permission request handling.
+
+## Walkover Adjudication Logic (`WalkoverAdjudicator`) — 2026-11-09
+
+- Created `WalkoverAdjudicator` (`lib/features/challenges/domain/walkover_adjudicator.dart`) to validate walkover claims based on scheduled match dates and participant status.
+
+## Roster Account Linking Service (`RosterAccountLinker`) — 2026-11-09
+
+- Created `RosterAccountLinker` (`lib/features/players/domain/roster_account_linker.dart`) to bridge development tournament seed player records (`player-1` to `player-24`) with authenticated Firebase Auth UIDs (`userId`).
+
+## Server-side Result Confirmation & Kampala Timezone Normalization — 2026-11-09
+
+- Added pure JS ranking transition engine (`ranking_engine.js`) and unit tests (`ranking_engine.test.js`) in `functions/`.
+- Implemented the `confirmMatchResult` Cloud Function in `functions/index.js` for server-side score verification, ranking recalculation (Normal & G.O.D. rules), and audit logging.
+- Normalized all challenge placement, response, and match cutoff calculations in `ChallengeRules` to the `Africa/Kampala` timezone (UTC+3).
+
 ## Restoration of Bottom Navigation Bar for Pending Players — 2026-11-09
 
 - Restored the bottom `NavigationBar` in `AppShell` for pending/unapproved players so the bottom navigation bar remains accessible across all tabs.

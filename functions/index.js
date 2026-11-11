@@ -10,6 +10,10 @@ const {
   isDuplicatePaymentReport,
   normalizeMtnMomoReference,
 } = require('./membership_flow');
+const {
+  calculateMatchWinner,
+  calculateNewRankings,
+} = require('./ranking_engine');
 
 initializeApp();
 const firestore = getFirestore();
@@ -558,5 +562,135 @@ exports.addPlayerPoints = onCall(async (request) => {
       createdAt: FieldValue.serverTimestamp(),
     });
     return { totalPoints, duplicate: false };
+  });
+});
+
+exports.confirmMatchResult = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Sign in to confirm match result.');
+  }
+
+  const { resultId } = request.data ?? {};
+  if (typeof resultId !== 'string' || resultId.trim().length === 0) {
+    throw new HttpsError('invalid-argument', 'A valid result ID is required.');
+  }
+
+  const reviewerId = request.auth.uid;
+  const resultReference = firestore.collection('results').doc(resultId);
+  const auditReference = firestore.collection('auditEvents').doc();
+
+  return firestore.runTransaction(async (transaction) => {
+    const resultSnapshot = await transaction.get(resultReference);
+    if (!resultSnapshot.exists) {
+      throw new HttpsError('not-found', 'Match result document not found.');
+    }
+    const resultData = resultSnapshot.data();
+    if (resultData.status !== 'submitted') {
+      if (resultData.status === 'confirmed') {
+        return { confirmed: true, duplicate: true };
+      }
+      throw new HttpsError(
+        'failed-precondition',
+        'Only submitted match results can be confirmed.',
+      );
+    }
+
+    const challengeReference = firestore
+      .collection('challenges')
+      .doc(resultData.challengeId);
+    const rankingsReference = firestore.collection('rankings');
+    const ladderStateReference = firestore
+      .collection('system')
+      .doc('ladderState');
+
+    const [challengeSnapshot, rankingsSnapshot, ladderStateSnapshot] =
+      await Promise.all([
+        transaction.get(challengeReference),
+        transaction.get(rankingsReference),
+        transaction.get(ladderStateReference),
+      ]);
+
+    if (!challengeSnapshot.exists) {
+      throw new HttpsError('not-found', 'Associated challenge not found.');
+    }
+    const challengeData = challengeSnapshot.data();
+    if (
+      reviewerId !== challengeData.challengerId &&
+      reviewerId !== challengeData.challengedId
+    ) {
+      throw new HttpsError(
+        'permission-denied',
+        'Only match participants can confirm the result.',
+      );
+    }
+    if (reviewerId === resultData.submittedBy) {
+      throw new HttpsError(
+        'permission-denied',
+        'The opponent must confirm the submitted score.',
+      );
+    }
+
+    const winner = calculateMatchWinner(resultData.score);
+    const currentPositions = {};
+    for (const doc of rankingsSnapshot.docs) {
+      currentPositions[doc.id] = doc.data().position;
+    }
+
+    const newPositions = calculateNewRankings({
+      currentPositions,
+      challengerId: challengeData.challengerId,
+      challengedId: challengeData.challengedId,
+      challengeType: challengeData.type,
+      winner,
+    });
+
+    for (const doc of rankingsSnapshot.docs) {
+      const nextPos = newPositions[doc.id];
+      if (nextPos !== undefined && nextPos !== doc.data().position) {
+        transaction.update(doc.ref, { position: nextPos });
+      }
+    }
+
+    const revision = ladderStateSnapshot.exists
+      ? ladderStateSnapshot.data()?.revision ?? 0
+      : 0;
+
+    transaction.update(resultReference, {
+      status: 'confirmed',
+      reviewedBy: reviewerId,
+      reviewedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.update(challengeReference, {
+      status: 'completed',
+      completedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.set(
+      ladderStateReference,
+      {
+        revision: revision + 1,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    transaction.create(auditReference, {
+      actorId: reviewerId,
+      actorRole: 'player',
+      eventType: 'matchResultConfirmed',
+      entityType: 'result',
+      entityId: resultId,
+      before: { status: 'submitted' },
+      after: {
+        status: 'confirmed',
+        winner,
+        score: resultData.score,
+        challengeId: resultData.challengeId,
+      },
+      reason: 'Opponent confirmed the match result score.',
+      createdAt: FieldValue.serverTimestamp(),
+    });
+
+    return { confirmed: true, duplicate: false, winner };
   });
 });

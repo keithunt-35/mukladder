@@ -3,9 +3,14 @@
 ## Current state — 9 November 2026
 
 - The Android app uses Firebase Authentication and Firestore.
-- The in-app logo and Android launcher now share the canonical
-  `assets/brand/app_brand_mark.png`.
-- Pending players can view their Player dashboard and request membership, with the bottom navigation bar (`NavigationBar`) fully accessible across all tabs. Each new request creates a persistent in-app alert for every configured Admin. FCM push alerts are not implemented. Deploy the current Cloud Function before relying on new alerts in Firebase.
+- The in-app logo and Android launcher share the canonical `assets/brand/app_brand_mark.png`.
+- The bottom navigation bar (`NavigationBar`) is authentication-aware: it is hidden on the login/auth screen (`user == null`) and appears automatically upon sign-in.
+- Pending players can view their Player dashboard and request membership with navigation bar access across all tabs.
+- Enhanced `FirebaseMessagingService` for foreground messaging listeners, token retrieval, and background message handling.
+- Added `WalkoverAdjudicator` for validating walkover claims based on scheduled match dates and participant status.
+- Added `RosterAccountLinker` to bridge seeded tournament roster player records (`player-1` to `player-24`) with verified Firebase Auth UIDs.
+- Added pure JS ranking calculator (`ranking_engine.js`) and `confirmMatchResult` Cloud Function in `functions/index.js` for server-side score verification, ranking recalculation, and audit logging.
+- Challenge deadline and cutoff calculations in `ChallengeRules` are normalized to the `Africa/Kampala` timezone (UTC+3).
 - The ladder screen streams ordered documents from the `rankings` collection;
   its current 24-player development seed is still static source data.
 - The ranking calculator is provisional. No trusted backend updates official
